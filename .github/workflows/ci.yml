@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> src-tauri/target
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install frontend
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Rust tests
+        working-directory: src-tauri
+        env:
+          VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID_DEV || '' }}
+          VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET_DEV || '' }}
+        run: cargo test --lib
