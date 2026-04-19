@@ -9,6 +9,8 @@ export type Prefs = {
   start_at_login: boolean
   global_shortcut: string
   show_in_dock: boolean
+  notify_on_failure: boolean
+  notify_on_recovery: boolean
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -18,6 +20,8 @@ export const DEFAULT_PREFS: Prefs = {
   start_at_login: false,
   global_shortcut: "Alt+Command+D",
   show_in_dock: true,
+  notify_on_failure: true,
+  notify_on_recovery: true,
 }
 
 type PrefKey = keyof Prefs

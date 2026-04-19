@@ -18,23 +18,42 @@ import {
 } from "@/lib/deployments"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { useScope } from "@/hooks/use-scope"
+import { DEFAULT_PREFS, prefsApi, type Prefs } from "@/lib/prefs"
 import { PopoverHeader } from "@/components/popover/popover-header"
 import { PopoverFooter } from "@/components/popover/popover-footer"
+import { FilterBar } from "@/components/popover/filter-bar"
+import type { ProjectSelection } from "@/components/popover/project-filter"
 import { DeployRow } from "@/components/popover/deploy-row"
+import { AccountGroupHeader } from "@/components/popover/account-group-header"
 import { PopoverLoading } from "@/components/popover/states/loading"
 import { PopoverEmpty } from "@/components/popover/states/empty"
 import { PopoverNoAccounts } from "@/components/popover/states/no-accounts"
-import { PopoverOffline } from "@/components/popover/states/offline"
+import { OfflineBanner } from "@/components/popover/states/offline-banner"
+
+function msToLabel(ms: number): string {
+  if (ms < 60_000) return `${ms / 1000}s`
+  return `${ms / 60_000}m`
+}
 
 export function PopoverApp() {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const { state, loading: dashLoading } = useDashboard()
   const [scope, setScope] = useScope()
-  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(
-    () => new Set(),
-  )
+  const [selectedProjectIds, setSelectedProjectIds] = useState<ProjectSelection>(null)
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [isChecking, setIsChecking] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setIsChecking(false)
+  }, [state])
+
+  function handleRefresh() {
+    setIsChecking(true)
+    void deploymentsApi.refreshNow()
+  }
 
   const reloadAccounts = useCallback(async () => {
     try {
@@ -50,6 +69,7 @@ export function PopoverApp() {
   useEffect(() => {
     void reloadAccounts()
     void deploymentsApi.hydrateAdapters()
+    prefsApi.get().then(setPrefs).catch(() => {})
   }, [reloadAccounts])
 
   useEffect(() => {
@@ -86,24 +106,50 @@ export function PopoverApp() {
   }, [state.projects])
 
   useEffect(() => {
-    if (selectedProjectIds.size === 0) return
+    if (selectedProjectIds === null) return
     const valid = new Set<string>()
     for (const id of selectedProjectIds) {
       if (scopedProjects.some((p) => p.id === id)) valid.add(id)
     }
     if (valid.size !== selectedProjectIds.size) {
-      setSelectedProjectIds(valid)
+      setSelectedProjectIds(valid.size === 0 ? null : valid)
     }
   }, [scopedProjects, selectedProjectIds])
 
+  const scopedProjectIds = useMemo(
+    () => new Set(scopedProjects.map((p) => p.id)),
+    [scopedProjects],
+  )
+
+  const scopedDeployments = useMemo<Deployment[]>(
+    () => state.deployments.filter((d) => scopedProjectIds.has(d.project_id)),
+    [state.deployments, scopedProjectIds],
+  )
+
   const filteredDeployments = useMemo<Deployment[]>(() => {
-    const scopedProjectIds = new Set(scopedProjects.map((p) => p.id))
-    return state.deployments.filter((d) => {
-      if (!scopedProjectIds.has(d.project_id)) return false
-      if (selectedProjectIds.size === 0) return true
-      return selectedProjectIds.has(d.project_id)
-    })
-  }, [state.deployments, scopedProjects, selectedProjectIds])
+    if (selectedProjectIds === null) return scopedDeployments
+    return scopedDeployments.filter((d) => selectedProjectIds.has(d.project_id))
+  }, [scopedDeployments, selectedProjectIds])
+
+  const groups = useMemo(() => {
+    const accountMap = new Map(accounts.map((a) => [a.id, a]))
+    const byAccount = new Map<string, Deployment[]>()
+
+    for (const d of filteredDeployments) {
+      const project = projectsById.get(d.project_id)
+      if (!project) continue
+      const list = byAccount.get(project.account_id) ?? []
+      list.push(d)
+      byAccount.set(project.account_id, list)
+    }
+
+    return [...byAccount.entries()]
+      .map(([accountId, deps]) => ({
+        account: accountMap.get(accountId) ?? null,
+        deployments: deps,
+      }))
+      .filter((g) => g.account !== null)
+  }, [filteredDeployments, accounts, projectsById])
 
   const onRootKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const meta = event.metaKey || event.ctrlKey
@@ -116,7 +162,7 @@ export function PopoverApp() {
 
     if (meta && event.key.toLowerCase() === "r") {
       event.preventDefault()
-      void deploymentsApi.refreshNow()
+      handleRefresh()
       return
     }
     if (meta && event.key === ",") {
@@ -147,12 +193,14 @@ export function PopoverApp() {
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault()
-      moveFocus(listRef.current, event.key === "ArrowDown" ? 1 : -1)
+      const nextId = moveFocus(listRef.current, event.key === "ArrowDown" ? 1 : -1)
+      if (nextId) setFocusedId(nextId)
     }
   }
 
   const hasAccounts = accounts.length > 0
   const hasAnyScopedProjects = scopedProjects.length > 0
+  const intervalLabel = msToLabel(prefs.refresh_interval_ms)
 
   return (
     <div
@@ -160,57 +208,78 @@ export function PopoverApp() {
       tabIndex={-1}
       onKeyDown={onRootKeyDown}
     >
-      <PopoverHeader
-        accounts={accounts}
-        scope={scope}
-        onScopeChange={setScope}
-        projects={scopedProjects}
-        selectedProjectIds={selectedProjectIds}
-        onSelectedProjectIdsChange={setSelectedProjectIds}
-        refreshing={state.polling}
-      />
+      <PopoverHeader deployments={filteredDeployments} onRefresh={handleRefresh} />
+      {hasAccounts && (
+        <FilterBar
+          accounts={accounts}
+          scope={scope}
+          onScopeChange={setScope}
+          projects={scopedProjects}
+          selectedProjectIds={selectedProjectIds}
+          onSelectedProjectIdsChange={setSelectedProjectIds}
+          deployments={scopedDeployments}
+        />
+      )}
       <div
         ref={listRef}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto"
       >
         {accountsLoading ? null : !hasAccounts ? (
           <PopoverNoAccounts />
-        ) : state.offline ? (
-          <PopoverOffline />
         ) : dashLoading && state.deployments.length === 0 ? (
           <PopoverLoading />
-        ) : !hasAnyScopedProjects || filteredDeployments.length === 0 ? (
-          <PopoverEmpty />
         ) : (
-          <ul>
-            {filteredDeployments.map((deployment) => (
-              <li key={`${deployment.project_id}:${deployment.id}`}>
-                <DeployRow
-                  deployment={deployment}
-                  project={projectsById.get(deployment.project_id) ?? null}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            {state.offline && (
+              <OfflineBanner lastRefreshedAt={state.last_refreshed_at} />
+            )}
+            <div className={state.offline ? "pointer-events-none opacity-65" : undefined}>
+              {!hasAnyScopedProjects || filteredDeployments.length === 0 ? (
+                <PopoverEmpty />
+              ) : (
+                groups.map(({ account, deployments }) => (
+                  <section key={account!.id}>
+                    <AccountGroupHeader
+                      label={account!.display_name}
+                      platform={account!.platform}
+                      count={deployments.length}
+                    />
+                    {deployments.map((d) => (
+                      <DeployRow
+                        key={`${d.project_id}:${d.id}`}
+                        deployment={d}
+                        project={projectsById.get(d.project_id) ?? null}
+                        focused={d.id === focusedId}
+                      />
+                    ))}
+                  </section>
+                ))
+              )}
+            </div>
+          </>
         )}
       </div>
       <PopoverFooter
         lastRefreshedAt={state.last_refreshed_at}
         offline={state.offline}
+        refreshing={isChecking}
+        intervalLabel={intervalLabel}
       />
     </div>
   )
 }
 
-function moveFocus(root: HTMLElement | null, delta: number) {
-  if (!root) return
+function moveFocus(root: HTMLElement | null, delta: number): string | null {
+  if (!root) return null
   const rows = Array.from(
     root.querySelectorAll<HTMLElement>("[data-deploy-row]"),
   )
-  if (rows.length === 0) return
+  if (rows.length === 0) return null
   const active = document.activeElement as HTMLElement | null
   const idx = active ? rows.indexOf(active) : -1
   const next = idx < 0 ? (delta > 0 ? 0 : rows.length - 1) : idx + delta
   const clamped = Math.max(0, Math.min(rows.length - 1, next))
-  rows[clamped]?.focus()
+  const row = rows[clamped]
+  row?.focus()
+  return row?.dataset.deployId ?? null
 }

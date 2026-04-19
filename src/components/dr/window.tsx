@@ -1,10 +1,16 @@
 import type { CSSProperties, ReactNode } from "react"
+import { getCurrentWindow } from "@tauri-apps/api/window"
 import { cn } from "@/lib/utils"
 
 function TrafficLights() {
   return (
     <div className="flex items-center gap-2">
-      <span className="size-3 rounded-full bg-[#ff5f57] ring-[0.5px] ring-black/20" />
+      <button
+        type="button"
+        aria-label="Close"
+        className="size-3 rounded-full bg-[#ff5f57] ring-[0.5px] ring-black/20 hover:brightness-90 active:brightness-75"
+        onClick={() => void getCurrentWindow().close()}
+      />
       <span className="size-3 rounded-full bg-[#febc2e] ring-[0.5px] ring-black/20" />
       <span className="size-3 rounded-full bg-[#28c840] ring-[0.5px] ring-black/20" />
     </div>

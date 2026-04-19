@@ -1,28 +1,18 @@
-import { DRButton } from "@/components/dr/button"
 import { Icon } from "@/components/dr/icon"
-import { deploymentsApi } from "@/lib/deployments"
 
 export function PopoverEmpty() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-10 py-12 text-center">
-      <span className="inline-flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
-        <Icon name="clock" size={18} />
-      </span>
-      <div className="flex flex-col gap-1">
-        <p className="font-display text-[14px] font-medium text-foreground">
-          No deployments yet
-        </p>
-        <p className="text-[12px] text-muted-foreground">
-          Push a commit and it'll show up here.
-        </p>
+    <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
+      <div className="mb-[14px] flex size-[44px] items-center justify-center rounded-full border border-dashed border-border text-faint">
+        <Icon name="dot" size={14} />
       </div>
-      <DRButton
-        variant="secondary"
-        size="sm"
-        onClick={() => void deploymentsApi.refreshNow()}
-      >
-        Refresh
-      </DRButton>
+      <p className="mb-1 text-[13px] font-semibold text-foreground">
+        Suspiciously quiet.
+      </p>
+      <p className="max-w-[240px] text-[12px] leading-[1.5] text-muted-foreground">
+        Your accounts are connected but no deployments have landed yet. Push
+        something and we'll start listening.
+      </p>
     </div>
   )
 }

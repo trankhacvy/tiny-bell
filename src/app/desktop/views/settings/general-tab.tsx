@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { type ReactNode, useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { cn } from "@/lib/utils"
 import { Kbd } from "@/components/dr/kbd"
 import { DRButton } from "@/components/dr/button"
+import { Icon } from "@/components/dr/icon"
+import { devApi, windowApi } from "@/lib/deployments"
 import {
   DEFAULT_PREFS,
   prefsApi,
@@ -53,83 +55,146 @@ export function SettingsGeneral() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Section
-        title="Theme"
-        hint="Match your system, or pin a mode."
-      >
-        <Segmented
-          options={THEME_OPTIONS}
-          value={prefs.theme}
-          onChange={(v) => void update("theme", v)}
+    <div className="flex flex-col gap-[22px]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+        Monitoring
+      </p>
+      <SettingsCard>
+        <SettingsRow
+          title="Polling interval"
+          desc="How often to check each provider. Lower values may hit rate limits."
+          control={
+            <Segmented
+              options={INTERVAL_OPTIONS.map((o) => ({ label: o.label, value: o.ms }))}
+              value={prefs.refresh_interval_ms}
+              onChange={(v) => void update("refresh_interval_ms", v)}
+            />
+          }
         />
-      </Section>
+        <SettingsRow
+          title="Notify on failed deploy"
+          desc="Native notification when a deploy goes red."
+          control={
+            <Switch
+              checked={prefs.notify_on_failure}
+              onChange={(v) => void update("notify_on_failure", v)}
+            />
+          }
+        />
+        <SettingsRow
+          title="Notify on recovery"
+          desc="Ping me when red turns back to green."
+          control={
+            <Switch
+              checked={prefs.notify_on_recovery}
+              onChange={(v) => void update("notify_on_recovery", v)}
+            />
+          }
+          last
+        />
+      </SettingsCard>
 
-      <Section
-        title="Refresh interval"
-        hint="How often Dev Radio polls your providers."
-      >
-        <Segmented
-          options={INTERVAL_OPTIONS.map((o) => ({
-            label: o.label,
-            value: o.ms,
-          }))}
-          value={prefs.refresh_interval_ms}
-          onChange={(v) => void update("refresh_interval_ms", v)}
+      <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+        Application
+      </p>
+      <SettingsCard>
+        <SettingsRow
+          title="Launch at login"
+          desc="Start Dev Radio when you log in."
+          control={
+            <Switch
+              checked={prefs.start_at_login}
+              onChange={(v) => void update("start_at_login", v)}
+            />
+          }
         />
-      </Section>
+        <SettingsRow
+          title="Show dock icon"
+          desc="Off by default — Dev Radio lives in the menubar."
+          control={
+            <Switch
+              checked={prefs.show_in_dock}
+              onChange={(v) => void update("show_in_dock", v)}
+            />
+          }
+        />
+        <SettingsRow
+          title="Appearance"
+          control={
+            <Segmented
+              options={THEME_OPTIONS}
+              value={prefs.theme}
+              onChange={(v) => void update("theme", v)}
+            />
+          }
+          last
+        />
+      </SettingsCard>
 
-      <Section
-        title="Start at login"
-        hint="Launch Dev Radio when you log in."
-      >
-        <Switch
-          checked={prefs.start_at_login}
-          onChange={(v) => void update("start_at_login", v)}
+      <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+        Menubar shortcut
+      </p>
+      <SettingsCard>
+        <SettingsRow
+          title="Open menubar"
+          desc="Global hotkey to show the deploy list from anywhere."
+          control={
+            <ShortcutRecorder
+              accelerator={prefs.global_shortcut}
+              onChange={(v) => void update("global_shortcut", v)}
+            />
+          }
+          last
         />
-      </Section>
+      </SettingsCard>
 
-      <Section
-        title="Show in Dock"
-        hint="Keep the Dev Radio icon in your Dock."
-      >
-        <Switch
-          checked={prefs.show_in_dock}
-          onChange={(v) => void update("show_in_dock", v)}
-        />
-      </Section>
+      <div className="flex justify-end">
+        <DRButton
+          variant="ghost"
+          size="sm"
+          leading={<Icon name="warning" size={12} className="text-danger" />}
+          className="text-danger hover:text-danger"
+          onClick={() => void windowApi.quit()}
+        >
+          Quit Dev Radio
+        </DRButton>
+      </div>
 
-      <Section
-        title="Global shortcut"
-        hint="Toggle the menubar popover from anywhere."
-      >
-        <ShortcutRecorder
-          accelerator={prefs.global_shortcut}
-          onChange={(v) => void update("global_shortcut", v)}
-        />
-      </Section>
+      {import.meta.env.DEV && <DevResetSection />}
     </div>
   )
 }
 
-type SectionProps = {
-  title: string
-  hint?: string
-  children: React.ReactNode
+function SettingsCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-[8px] border border-border bg-surface">
+      {children}
+    </div>
+  )
 }
 
-function Section({ title, hint, children }: SectionProps) {
+type SettingsRowProps = {
+  title: string
+  desc?: string
+  control: ReactNode
+  last?: boolean
+}
+
+function SettingsRow({ title, desc, control, last }: SettingsRowProps) {
   return (
-    <div className="flex items-start justify-between gap-6 border-b border-border-subtle pb-4 last:border-b-0 last:pb-0">
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[13px] font-medium text-foreground">
-          {title}
-        </span>
-        {hint ? (
-          <span className="text-[11.5px] text-muted-foreground">{hint}</span>
-        ) : null}
+    <div
+      className={cn(
+        "flex items-center gap-4 px-[14px] py-[12px]",
+        !last && "border-b border-border-subtle",
+      )}
+    >
+      <div className="flex-1">
+        <p className="text-[12.5px] font-medium text-foreground">{title}</p>
+        {desc && (
+          <p className="mt-0.5 text-[11.5px] leading-[1.4] text-faint">{desc}</p>
+        )}
       </div>
-      <div className="shrink-0">{children}</div>
+      {control}
     </div>
   )
 }
@@ -320,6 +385,66 @@ function normalizeKey(raw: string): string | null {
   if (raw.length === 1) return raw.toUpperCase()
   if (/^F\d{1,2}$/.test(raw)) return raw
   return raw
+}
+
+function DevResetSection() {
+  const [confirm, setConfirm] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    if (!confirm) return
+    const t = setTimeout(() => setConfirm(false), 4000)
+    return () => clearTimeout(t)
+  }, [confirm])
+
+  async function handleClick() {
+    if (!confirm) {
+      setConfirm(true)
+      return
+    }
+    setConfirm(false)
+    setBusy(true)
+    try {
+      await devApi.reset()
+      setDone(true)
+      setTimeout(() => void windowApi.quit(), 800)
+    } catch {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-[8px] border border-dashed border-danger/40 bg-danger/5 p-[14px]">
+      <div className="mb-[10px] flex items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-danger/80">
+          Dev tools
+        </span>
+        <span className="rounded-[3px] border border-danger/30 bg-danger/10 px-1.5 py-0 text-[9.5px] font-semibold uppercase tracking-[0.5px] text-danger">
+          dev only
+        </span>
+      </div>
+      <p className="mb-[12px] text-[12px] leading-[1.5] text-muted-foreground">
+        Wipes all stored accounts, tokens (including OS keychain), and preferences.
+        The app will quit so you can test a fresh onboarding flow.
+      </p>
+      {confirm && (
+        <p className="mb-[10px] text-[11.5px] font-medium text-danger">
+          Click again to confirm — this cannot be undone.
+        </p>
+      )}
+      <DRButton
+        variant="secondary"
+        size="sm"
+        leading={<Icon name="warning" size={12} className="text-danger" />}
+        className="border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
+        disabled={busy || done}
+        onClick={() => void handleClick()}
+      >
+        {done ? "Done — quitting…" : busy ? "Resetting…" : confirm ? "Confirm reset" : "Reset all data"}
+      </DRButton>
+    </div>
+  )
 }
 
 function prettyKey(name: string): string {

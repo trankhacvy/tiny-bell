@@ -1,126 +1,75 @@
-import { useState } from "react"
-import {
-  DRMenu,
-  DRMenuItem,
-  DRMenuSeparator,
-} from "@/components/dr/menu"
-import { Icon } from "@/components/dr/icon"
-import { InitialsAvatar } from "@/components/dr/initials-avatar"
-import { ProviderMark } from "@/components/dr/provider-mark"
+import { windowApi } from "@/lib/deployments"
 import { IconButton } from "./icon-button"
-import { StackedAvatars } from "./stacked-avatars"
-import { ProjectFilter } from "./project-filter"
-import type { AccountRecord } from "@/lib/accounts"
-import type { Scope } from "@/hooks/use-scope"
-import type { Project } from "@/lib/deployments"
-import { deploymentsApi, windowApi } from "@/lib/deployments"
+import type { Deployment } from "@/lib/deployments"
 
-type PopoverHeaderProps = {
-  accounts: AccountRecord[]
-  scope: Scope
-  onScopeChange: (next: Scope) => void
-  projects: Project[]
-  selectedProjectIds: Set<string>
-  onSelectedProjectIdsChange: (next: Set<string>) => void
-  refreshing?: boolean
+type Tone = "healthy" | "building" | "broken"
+
+function deriveHeaderTone(deployments: Deployment[]): Tone {
+  if (deployments.some((d) => d.state === "error")) return "broken"
+  if (deployments.some((d) => d.state === "building" || d.state === "queued")) return "building"
+  return "healthy"
 }
 
-export function PopoverHeader({
-  accounts,
-  scope,
-  onScopeChange,
-  projects,
-  selectedProjectIds,
-  onSelectedProjectIdsChange,
-  refreshing,
-}: PopoverHeaderProps) {
-  const [open, setOpen] = useState(false)
-  const current =
-    scope === "all" ? null : accounts.find((a) => a.id === scope) ?? null
+function buildSummary(deployments: Deployment[], tone: Tone): string {
+  if (deployments.length === 0) return "All ready"
+  const errors = deployments.filter((d) => d.state === "error").length
+  const building = deployments.filter((d) => d.state === "building" || d.state === "queued").length
+  const ready = deployments.filter((d) => d.state === "ready").length
+  if (tone === "broken") return `${errors} error${errors > 1 ? "s" : ""} · ${ready} ready`
+  if (tone === "building") return `${building} building · ${ready} ready`
+  return "All ready"
+}
+
+type PopoverHeaderProps = {
+  deployments: Deployment[]
+  onRefresh: () => void
+}
+
+export function PopoverHeader({ deployments, onRefresh }: PopoverHeaderProps) {
+  const tone = deriveHeaderTone(deployments)
+
+  const toneColor =
+    tone === "broken"
+      ? "var(--red)"
+      : tone === "building"
+        ? "var(--amber)"
+        : "var(--green)"
+
+  const toneBg =
+    tone === "broken"
+      ? "color-mix(in oklch, var(--red) 14%, transparent)"
+      : tone === "building"
+        ? "color-mix(in oklch, var(--amber) 18%, transparent)"
+        : "color-mix(in oklch, var(--green) 14%, transparent)"
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle bg-surface px-3">
-      <DRMenu
-        open={open}
-        onOpenChange={setOpen}
-        trigger={
-          <button
-            type="button"
-            className="flex h-8 min-w-0 items-center gap-2 rounded-[6px] px-1.5 outline-none hover:bg-hover focus-visible:bg-hover"
-          >
-            {current ? (
-              <>
-                <InitialsAvatar name={current.display_name} size={20} />
-                <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                  {current.display_name}
-                </span>
-                <ProviderMark
-                  platform={current.platform}
-                  size={11}
-                  className="shrink-0 text-muted-foreground"
-                />
-              </>
-            ) : (
-              <>
-                <StackedAvatars accounts={accounts} size={20} max={3} />
-                <span className="text-[13px] font-medium text-foreground">
-                  {accounts.length === 0
-                    ? "Dev Radio"
-                    : accounts.length === 1
-                      ? accounts[0].display_name
-                      : "All accounts"}
-                </span>
-              </>
-            )}
-            <Icon
-              name="chevron-down"
-              size={11}
-              className="shrink-0 text-muted-foreground"
-            />
-          </button>
-        }
+    <header className="flex h-[42px] shrink-0 items-center gap-2 border-b border-border-subtle bg-surface px-[14px]">
+      <div
+        className="inline-flex h-[22px] items-center gap-[7px] rounded-full px-[8px] text-[11.5px] font-semibold"
+        style={{ background: toneBg, color: toneColor }}
       >
-        <DRMenuItem accel="⌘0" onSelect={() => onScopeChange("all")}>
-          All accounts
-        </DRMenuItem>
-        {accounts.length > 0 && <DRMenuSeparator />}
-        {accounts.map((acc, i) => (
-          <DRMenuItem
-            key={acc.id}
-            accel={i < 9 ? `⌘${i + 1}` : undefined}
-            onSelect={() => onScopeChange(acc.id)}
-            left={<InitialsAvatar name={acc.display_name} size={16} />}
-            right={<ProviderMark platform={acc.platform} size={11} />}
-          >
-            {acc.display_name}
-          </DRMenuItem>
-        ))}
-        <DRMenuSeparator />
-        <DRMenuItem
-          accel="⌘N"
-          onSelect={() => void windowApi.openDesktop("onboarding")}
-        >
-          Add account…
-        </DRMenuItem>
-      </DRMenu>
-      <ProjectFilter
-        projects={projects}
-        selected={selectedProjectIds}
-        onChange={onSelectedProjectIdsChange}
-      />
-      <div className="ml-auto flex items-center gap-0.5">
-        <IconButton
-          name="refresh"
-          tooltip="Refresh (⌘R)"
-          onClick={() => void deploymentsApi.refreshNow()}
-          className={refreshing ? "animate-spin" : undefined}
+        <span
+          className="size-[7px] shrink-0 rounded-full"
+          style={{
+            background: toneColor,
+            animation: tone === "building" ? "dr-pulse-dot 1.4s ease-in-out infinite" : "none",
+          }}
         />
-        <IconButton
-          name="gear"
-          tooltip="Settings (⌘,)"
-          onClick={() => void windowApi.openDesktop("settings")}
-        />
+        {buildSummary(deployments, tone)}
       </div>
+      <span className="flex-1" />
+      <IconButton
+        name="refresh"
+        size={13}
+        tooltip="Refresh (⌘R)"
+        onClick={onRefresh}
+      />
+      <IconButton
+        name="gear"
+        size={13}
+        tooltip="Settings"
+        onClick={() => void windowApi.openDesktop("settings")}
+      />
     </header>
   )
 }
