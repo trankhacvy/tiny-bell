@@ -116,19 +116,29 @@ impl DeploymentMonitor for VercelAdapter {
             .collect())
     }
 
-    async fn list_deployments(
+    async fn list_recent_deployments(
         &self,
-        project_id: &str,
+        project_ids: Option<&[String]>,
         limit: usize,
     ) -> Result<Vec<Deployment>, AdapterError> {
-        let q = format!("projectId={project_id}&limit={limit}");
+        let mut q = format!("limit={limit}");
+        if let Some(ids) = project_ids {
+            for id in ids {
+                q.push_str("&projectIds=");
+                q.push_str(id);
+            }
+        }
         let res: DeploymentsResponse = self.get("/v6/deployments", &q).await?;
-        let pid = project_id.to_string();
-        Ok(res
+        let mut deps: Vec<Deployment> = res
             .deployments
             .into_iter()
-            .map(|d| mapper::deployment_from_dto(d, &pid))
-            .collect())
+            .map(|d| {
+                let pid = d.project_id.clone().unwrap_or_default();
+                mapper::deployment_from_dto(d, &pid)
+            })
+            .collect();
+        deps.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(deps)
     }
 }
 
@@ -202,20 +212,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_deployments_maps_dto() {
+    async fn list_recent_deployments_filters_by_project_ids() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/v6/deployments"))
-            .and(query_param("projectId", "prj_1"))
-            .and(query_param("limit", "10"))
+            .and(query_param("projectIds", "prj_1"))
+            .and(query_param("limit", "100"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "deployments": [
                     {
                         "uid": "dpl_1",
+                        "projectId": "prj_1",
                         "url": "acme-web.vercel.app",
                         "inspectorUrl": "https://vercel.com/acme/acme-web/dpl_1",
-                        "createdAt": 1_700_000_000_000i64,
-                        "readyAt":   1_700_000_010_000i64,
+                        "createdAt": 1_700_000_100_000i64,
+                        "readyAt":   1_700_000_110_000i64,
                         "readyState": "READY",
                         "target": "production",
                         "meta": {
@@ -226,8 +237,9 @@ mod tests {
                     },
                     {
                         "uid": "dpl_2",
+                        "projectId": "prj_1",
                         "readyState": "BUILDING",
-                        "createdAt": 1_700_000_100_000i64,
+                        "createdAt": 1_700_000_000_000i64,
                         "meta": {}
                     }
                 ]
@@ -236,9 +248,13 @@ mod tests {
             .await;
 
         let a = adapter(server.uri(), None);
-        let deps = a.list_deployments("prj_1", 10).await.expect("deps");
+        let deps = a
+            .list_recent_deployments(Some(&["prj_1".into()]), 100)
+            .await
+            .expect("deps");
         assert_eq!(deps.len(), 2);
         assert_eq!(deps[0].state, DeploymentState::Ready);
+        assert_eq!(deps[0].project_id, "prj_1");
         assert_eq!(deps[0].environment, "production");
         assert_eq!(deps[0].url.as_deref(), Some("https://acme-web.vercel.app"));
         assert_eq!(
@@ -248,6 +264,41 @@ mod tests {
         assert_eq!(deps[0].duration_ms, Some(10_000));
         assert_eq!(deps[0].commit_message.as_deref(), Some("Update README.md"));
         assert_eq!(deps[1].state, DeploymentState::Building);
+    }
+
+    #[tokio::test]
+    async fn list_recent_deployments_no_filter_returns_all() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v6/deployments"))
+            .and(query_param("limit", "50"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "deployments": [
+                    {
+                        "uid": "dpl_a",
+                        "projectId": "prj_a",
+                        "readyState": "READY",
+                        "createdAt": 1_700_000_200_000i64,
+                        "meta": {}
+                    },
+                    {
+                        "uid": "dpl_b",
+                        "projectId": "prj_b",
+                        "readyState": "READY",
+                        "createdAt": 1_700_000_300_000i64,
+                        "meta": {}
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let a = adapter(server.uri(), None);
+        let deps = a.list_recent_deployments(None, 50).await.expect("deps");
+        assert_eq!(deps.len(), 2);
+        assert_eq!(deps[0].id, "dpl_b");
+        assert_eq!(deps[0].project_id, "prj_b");
+        assert_eq!(deps[1].project_id, "prj_a");
     }
 
     #[tokio::test]

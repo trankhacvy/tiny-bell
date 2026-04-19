@@ -67,6 +67,8 @@ pub struct Project {
 pub struct Deployment {
     pub id: String,
     pub project_id: String,
+    pub service_id: Option<String>,
+    pub service_name: Option<String>,
     pub state: DeploymentState,
     pub environment: String,
     pub url: Option<String>,

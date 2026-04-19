@@ -12,7 +12,9 @@ pub mod keychain;
 pub mod notifications;
 pub mod platform;
 pub mod poller;
+pub mod prefs;
 pub mod redact;
+pub mod shortcut;
 pub mod store;
 pub mod tray;
 pub mod window;
@@ -22,6 +24,7 @@ use adapters::registry::AdapterRegistry;
 use cache::Cache;
 use commands::accounts as account_cmds;
 use commands::deployments as deployment_cmds;
+use commands::prefs as prefs_cmds;
 use commands::ux as ux_cmds;
 use commands::window as window_cmds;
 
@@ -89,6 +92,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(external_navigation_plugin())
         .invoke_handler(tauri::generate_handler![
             account_cmds::start_oauth,
@@ -98,6 +102,7 @@ pub fn run() {
             account_cmds::delete_account,
             account_cmds::set_account_enabled,
             account_cmds::rename_account,
+            account_cmds::validate_token,
             account_cmds::hydrate_adapters,
             deployment_cmds::get_dashboard,
             deployment_cmds::refresh_now,
@@ -114,6 +119,9 @@ pub fn run() {
             window_cmds::set_autostart,
             ux_cmds::has_seen_close_hint,
             ux_cmds::mark_close_hint_seen,
+            prefs_cmds::get_prefs,
+            prefs_cmds::set_pref,
+            prefs_cmds::set_window_theme,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -124,12 +132,46 @@ pub fn run() {
             tray::build(&handle)?;
             tray::set_health(&handle, tray::HealthLevel::Setup);
 
+            let prefs = prefs::load(&handle).unwrap_or_default();
+            let interval_secs = (prefs.refresh_interval_ms / 1000).max(5);
+
             let accounts = store::list_accounts(&handle).unwrap_or_default();
             if accounts.is_empty() {
                 window::show_desktop(&handle, "onboarding");
             } else {
-                platform::set_visible_dock(&handle, false);
+                platform::set_visible_dock(&handle, prefs.show_in_dock);
                 poller::ensure_started(&handle);
+                poller::set_interval_secs(&handle, interval_secs);
+            }
+
+            let initial_theme = match prefs.theme.as_str() {
+                "light" => Some(tauri::Theme::Light),
+                "dark" => Some(tauri::Theme::Dark),
+                _ => None,
+            };
+            for window in handle.webview_windows().values() {
+                let _ = window.set_theme(initial_theme);
+            }
+
+            if let Err(e) = shortcut::register(&handle, &prefs.global_shortcut) {
+                log::warn!("register global shortcut failed: {e}");
+            }
+
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = handle.autolaunch();
+                let desired = prefs.start_at_login;
+                let current = manager.is_enabled().unwrap_or(false);
+                if desired != current {
+                    let result = if desired {
+                        manager.enable()
+                    } else {
+                        manager.disable()
+                    };
+                    if let Err(e) = result {
+                        log::warn!("autostart sync failed: {e}");
+                    }
+                }
             }
 
             Ok(())

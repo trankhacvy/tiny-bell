@@ -6,7 +6,7 @@ use crate::auth::oauth::{
     self, generate_pkce, generate_state, redirect_uri_for, CallbackResult, OAUTH_TIMEOUT_SECS,
 };
 use crate::auth::AuthError;
-use crate::store::{self, StoredAccount};
+use crate::store::{self, AccountHealth, StoredAccount};
 
 const CLIENT_ID: &str = env!("VERCEL_CLIENT_ID");
 const CLIENT_SECRET: &str = env!("VERCEL_CLIENT_SECRET");
@@ -242,6 +242,7 @@ pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
         scope_id: token.team_id.clone(),
         enabled: true,
         created_at: chrono::Utc::now().timestamp_millis(),
+        health: AccountHealth::Ok,
     };
     store::save_account(&app, &stored).map_err(|e| AuthError::Store(e))?;
 

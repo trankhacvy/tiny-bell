@@ -4,7 +4,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { accountsApi, type AccountRecord } from "@/lib/accounts"
 import { OnboardingView } from "./views/onboarding-view"
 import { SettingsView } from "./views/settings-view"
-import { AboutView } from "./views/about-view"
 import { CloseHintDialog } from "./components/close-hint-dialog"
 
 export type DesktopRoute = "onboarding" | "settings" | "about"
@@ -61,28 +60,22 @@ export function DesktopApp() {
   }, [reload])
 
   const hasAccounts = accounts.length > 0
+  const settingsTab = route === "about" ? "About" : "Accounts"
 
   return (
     <>
-      {route === "onboarding" && (
+      {route === "onboarding" ? (
         <OnboardingView
           hasAccounts={hasAccounts}
           onRouteChange={setRoute}
           onConnected={() => void reload()}
           onDone={() => setRoute(hasAccounts ? "settings" : "onboarding")}
         />
-      )}
-      {route === "settings" && (
+      ) : (
         <SettingsView
           accounts={accounts}
-          onRouteChange={setRoute}
           onAccountsChange={reload}
-        />
-      )}
-      {route === "about" && (
-        <AboutView
-          hasAccounts={hasAccounts}
-          onRouteChange={setRoute}
+          initialTab={settingsTab}
         />
       )}
 

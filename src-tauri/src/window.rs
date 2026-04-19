@@ -52,6 +52,7 @@ pub fn show_popover<R: Runtime>(app: &AppHandle<R>) {
     let _ = w.show();
     let _ = w.set_focus();
     let _ = app.emit_to(EventTarget::webview_window(POPOVER), "popover:show", ());
+    crate::poller::force_refresh(app);
 }
 
 pub fn hide_popover<R: Runtime>(app: &AppHandle<R>) {

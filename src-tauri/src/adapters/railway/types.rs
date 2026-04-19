@@ -68,11 +68,6 @@ pub struct ServiceNode {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DeploymentsData {
-    pub deployments: DeploymentConnection,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct DeploymentConnection {
     #[serde(default)]
     pub edges: Vec<DeploymentEdge>,
@@ -99,4 +94,13 @@ pub struct DeploymentNode {
     pub static_url: Option<String>,
     #[serde(default)]
     pub meta: serde_json::Value,
+    #[serde(default)]
+    pub service: Option<DeploymentServiceRef>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeploymentServiceRef {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
 }

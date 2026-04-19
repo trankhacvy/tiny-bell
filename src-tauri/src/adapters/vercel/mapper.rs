@@ -23,9 +23,11 @@ fn environment_from_target(target: Option<&str>) -> String {
 }
 
 pub fn project_from_dto(dto: ProjectDto, account_id: &str) -> Project {
-    let latest = dto.latest_deployments.into_iter().next().map(|d| {
-        deployment_from_latest(d, &dto.id)
-    });
+    let latest = dto
+        .latest_deployments
+        .into_iter()
+        .max_by_key(|d| d.created.unwrap_or(0))
+        .map(|d| deployment_from_latest(d, &dto.id));
 
     Project {
         id: dto.id.clone(),
@@ -48,10 +50,13 @@ pub fn deployment_from_dto(dto: DeploymentDto, project_id: &str) -> Deployment {
     let finished_at = dto.ready_at;
     let duration_ms = finished_at
         .and_then(|f| if f >= created_at { Some((f - created_at) as u64) } else { None });
+    let pid = dto.project_id.clone().unwrap_or_else(|| project_id.to_string());
 
     Deployment {
         id: dto.uid,
-        project_id: project_id.to_string(),
+        project_id: pid,
+        service_id: None,
+        service_name: None,
         state,
         environment: environment_from_target(dto.target.as_deref()),
         url: dto.url.map(|u| if u.starts_with("http") { u } else { format!("https://{u}") }),
@@ -74,6 +79,8 @@ fn deployment_from_latest(dto: LatestDeploymentDto, project_id: &str) -> Deploym
     Deployment {
         id: dto.id.unwrap_or_default(),
         project_id: project_id.to_string(),
+        service_id: None,
+        service_name: None,
         state,
         environment: environment_from_target(dto.target.as_deref()),
         url: dto.url.map(|u| if u.starts_with("http") { u } else { format!("https://{u}") }),

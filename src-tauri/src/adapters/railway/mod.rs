@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use crate::adapters::r#trait::{AdapterError, DeploymentMonitor};
 use crate::adapters::{Deployment, Platform, Project};
 
-pub const DEFAULT_GRAPHQL_URL: &str = "https://backboard.railway.app/graphql/v2";
+pub const DEFAULT_GRAPHQL_URL: &str = "https://backboard.railway.com/graphql/v2";
 
 #[derive(Debug)]
 pub struct RailwayAdapter {
@@ -60,16 +60,25 @@ impl DeploymentMonitor for RailwayAdapter {
         .await
     }
 
-    async fn list_deployments(
+    async fn list_recent_deployments(
         &self,
-        project_id: &str,
+        project_ids: Option<&[String]>,
         limit: usize,
     ) -> Result<Vec<Deployment>, AdapterError> {
-        client::fetch_deployments(
+        let ids: Vec<String> = match project_ids {
+            Some(ids) if !ids.is_empty() => ids.to_vec(),
+            _ => self
+                .list_projects()
+                .await?
+                .into_iter()
+                .map(|p| p.id)
+                .collect(),
+        };
+        client::fetch_recent_deployments(
             &self.http,
             &self.graphql_url,
             &self.token,
-            project_id,
+            &ids,
             limit,
         )
         .await

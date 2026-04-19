@@ -7,6 +7,20 @@ use crate::adapters::Platform;
 const STORE_FILE: &str = "dev-radio.store.json";
 const ACCOUNTS_KEY: &str = "accounts";
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountHealth {
+    Ok,
+    NeedsReauth,
+    Revoked,
+}
+
+impl Default for AccountHealth {
+    fn default() -> Self {
+        AccountHealth::Ok
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredAccount {
     pub id: String,
@@ -15,6 +29,8 @@ pub struct StoredAccount {
     pub scope_id: Option<String>,
     pub enabled: bool,
     pub created_at: i64,
+    #[serde(default)]
+    pub health: AccountHealth,
 }
 
 fn load<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<StoredAccount>, String> {
