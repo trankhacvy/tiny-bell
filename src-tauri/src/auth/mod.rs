@@ -1,5 +1,7 @@
 pub mod oauth;
 pub mod pat;
+pub mod railway;
+pub mod token_provider;
 pub mod vercel;
 
 #[derive(Debug, thiserror::Error)]
