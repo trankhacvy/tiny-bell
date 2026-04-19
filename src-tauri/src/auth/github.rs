@@ -48,7 +48,7 @@ pub async fn fetch_github_profile_with_base(
     let res = client
         .get(format!("{api_base}/user"))
         .bearer_auth(token)
-        .header("User-Agent", "dev-radio")
+        .header("User-Agent", "tiny-bell")
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
@@ -98,7 +98,7 @@ pub async fn start_github_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
         state = urlencoding::encode(&state),
     );
     log::info!(
-        target: "dev_radio::oauth",
+        target: "tiny_bell::oauth",
         "GitHub OAuth authorize → redirect_uri={redirect}"
     );
 

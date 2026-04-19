@@ -170,7 +170,7 @@ pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
         state = urlencoding::encode(&state),
     );
     log::info!(
-        target: "dev_radio::oauth",
+        target: "tiny_bell::oauth",
         "OAuth authorize → slug={} redirect_uri={}",
         INTEGRATION_SLUG, redirect
     );

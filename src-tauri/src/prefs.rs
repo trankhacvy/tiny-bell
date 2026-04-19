@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
-const STORE_FILE: &str = "dev-radio.store.json";
+const STORE_FILE: &str = "tiny-bell.store.json";
 const PREFS_KEY: &str = "prefs";
 
 pub const DEFAULT_INTERVAL_MS: u64 = 30_000;

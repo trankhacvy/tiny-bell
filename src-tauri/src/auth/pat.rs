@@ -47,7 +47,7 @@ pub async fn fetch_railway_profile_with_url(
     token: &str,
     graphql_url: &str,
 ) -> Result<AccountProfile, AuthError> {
-    log::info!(target: "dev_radio::railway_pat", "fetch_railway_profile → {graphql_url}");
+    log::info!(target: "tiny_bell::railway_pat", "fetch_railway_profile → {graphql_url}");
     let client = reqwest::Client::new();
     let body = serde_json::json!({
         "query": "query { me { id email name avatar } }"
@@ -59,28 +59,28 @@ pub async fn fetch_railway_profile_with_url(
         .send()
         .await
         .map_err(|e| {
-            log::warn!(target: "dev_radio::railway_pat", "network error: {e}");
+            log::warn!(target: "tiny_bell::railway_pat", "network error: {e}");
             AuthError::from(e)
         })?;
 
     let status = res.status();
-    log::info!(target: "dev_radio::railway_pat", "railway response status={status}");
+    log::info!(target: "tiny_bell::railway_pat", "railway response status={status}");
 
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        log::warn!(target: "dev_radio::railway_pat", "railway returned {status}");
+        log::warn!(target: "tiny_bell::railway_pat", "railway returned {status}");
         return Err(AuthError::Provider("Invalid token".into()));
     }
 
     let value: serde_json::Value = res
         .error_for_status()
         .map_err(|e| {
-            log::warn!(target: "dev_radio::railway_pat", "http error: {e}");
+            log::warn!(target: "tiny_bell::railway_pat", "http error: {e}");
             AuthError::from(e)
         })?
         .json()
         .await
         .map_err(|e| {
-            log::warn!(target: "dev_radio::railway_pat", "json parse error: {e}");
+            log::warn!(target: "tiny_bell::railway_pat", "json parse error: {e}");
             AuthError::from(e)
         })?;
 
@@ -91,7 +91,7 @@ pub async fn fetch_railway_profile_with_url(
                 .and_then(|m| m.as_str())
                 .unwrap_or("GraphQL error")
                 .to_string();
-            log::warn!(target: "dev_radio::railway_pat", "graphql error: {msg}");
+            log::warn!(target: "tiny_bell::railway_pat", "graphql error: {msg}");
             return Err(AuthError::Provider(msg));
         }
     }
@@ -100,7 +100,7 @@ pub async fn fetch_railway_profile_with_url(
     let me = match me {
         Some(v) if !v.is_null() => v,
         _ => {
-            log::warn!(target: "dev_radio::railway_pat", "me is null — likely workspace/project token");
+            log::warn!(target: "tiny_bell::railway_pat", "me is null — likely workspace/project token");
             return Err(AuthError::Provider("Invalid token".into()));
         }
     };

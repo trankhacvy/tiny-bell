@@ -44,11 +44,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         return Ok(());
     }
 
-    let open = MenuItem::with_id(app, "open", "Open Dev Radio", true, Some("Cmd+O"))?;
+    let open = MenuItem::with_id(app, "open", "Open Tiny Bell", true, Some("Cmd+O"))?;
     let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, Some("Cmd+R"))?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Dev Radio", true, Some("Cmd+Q"))?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Tiny Bell", true, Some("Cmd+Q"))?;
     let menu = Menu::with_items(app, &[&open, &refresh, &settings, &sep, &quit])?;
 
     let template_icon = Image::from_bytes(ICON_TEMPLATE)?;

@@ -4,7 +4,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::adapters::Platform;
 
-const STORE_FILE: &str = "dev-radio.store.json";
+const STORE_FILE: &str = "tiny-bell.store.json";
 const ACCOUNTS_KEY: &str = "accounts";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

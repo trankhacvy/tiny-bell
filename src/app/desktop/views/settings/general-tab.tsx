@@ -100,7 +100,7 @@ export function SettingsGeneral() {
       <SettingsCard>
         <SettingsRow
           title="Launch at login"
-          desc="Start Dev Radio when you log in."
+          desc="Start Tiny Bell when you log in."
           control={
             <Switch
               checked={prefs.start_at_login}
@@ -110,7 +110,7 @@ export function SettingsGeneral() {
         />
         <SettingsRow
           title="Show dock icon"
-          desc="Off by default — Dev Radio lives in the menubar."
+          desc="Off by default — Tiny Bell lives in the menubar."
           control={
             <Switch
               checked={prefs.show_in_dock}
@@ -156,7 +156,7 @@ export function SettingsGeneral() {
           className="text-danger hover:text-danger"
           onClick={() => void windowApi.quit()}
         >
-          Quit Dev Radio
+          Quit Tiny Bell
         </DRButton>
       </div>
 

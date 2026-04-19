@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::AuthError;
 
-const SERVICE: &str = "dev-radio";
+const SERVICE: &str = "tiny-bell";
 const VAULT_ACCOUNT: &str = "vault";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +85,7 @@ fn flush() -> Result<(), AuthError> {
     };
     let entry = Entry::new(SERVICE, VAULT_ACCOUNT)?;
     entry.set_password(&serialized)?;
-    tracing::info!(target: "dev_radio::keychain", "vault flushed");
+    tracing::info!(target: "tiny_bell::keychain", "vault flushed");
     Ok(())
 }
 
@@ -138,7 +138,7 @@ pub fn store_secret(account_id: &str, secret: &StoredSecret) -> Result<(), AuthE
     }
     flush()?;
     tracing::info!(
-        target: "dev_radio::keychain",
+        target: "tiny_bell::keychain",
         account_id = account_id,
         "secret stored"
     );

@@ -185,7 +185,7 @@ pub fn redirect_uri_for(port: u16) -> String {
 }
 
 const SUCCESS_HTML: &str = r#"<!doctype html>
-<html><head><meta charset="utf-8"><title>Dev Radio connected</title>
+<html><head><meta charset="utf-8"><title>Tiny Bell connected</title>
 <style>
   body { font: 14px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-align: center; padding: 48px 24px; color: #0a0a0a; background: #fafafa; }
   h1 { font-size: 20px; margin: 0 0 8px; font-weight: 600; }
@@ -194,7 +194,7 @@ const SUCCESS_HTML: &str = r#"<!doctype html>
 </style></head>
 <body>
   <div class="ok">\u2713</div>
-  <h1>Dev Radio is connected</h1>
+  <h1>Tiny Bell is connected</h1>
   <p>You can close this tab and return to the app.</p>
   <script>setTimeout(function(){ window.close(); }, 800);</script>
 </body></html>"#;
@@ -208,7 +208,7 @@ const FAILURE_HTML: &str = r#"<!doctype html>
 </style></head>
 <body>
   <h1>Connection failed</h1>
-  <p>Please return to Dev Radio and try again.</p>
+  <p>Please return to Tiny Bell and try again.</p>
 </body></html>"#;
 
 #[cfg(test)]

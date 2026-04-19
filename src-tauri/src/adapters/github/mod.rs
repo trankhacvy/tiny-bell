@@ -57,7 +57,7 @@ impl GitHubAdapter {
             .http
             .get(&url)
             .bearer_auth(&self.token)
-            .header("User-Agent", "dev-radio")
+            .header("User-Agent", "tiny-bell")
             .header("Accept", "application/vnd.github+json")
             .send()
             .await

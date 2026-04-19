@@ -168,7 +168,7 @@ export function AddAccountForm({
       {mode === "oauth" ? (
         <div className="flex flex-col gap-2">
           <p className="text-[12px] text-muted-foreground">
-            Opens your browser to approve Dev Radio. The token is stored only
+            Opens your browser to approve Tiny Bell. The token is stored only
             in your system keychain.
           </p>
           <DRButton

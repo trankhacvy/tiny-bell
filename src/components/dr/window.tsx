@@ -27,7 +27,7 @@ type DRWindowProps = {
 }
 
 export function DRWindow({
-  title = "Dev Radio",
+  title = "Tiny Bell",
   titleRight,
   children,
   showChrome = true,

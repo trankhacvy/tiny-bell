@@ -253,7 +253,7 @@ pub async fn list_github_repos(
     let res = client
         .get("https://api.github.com/user/repos?sort=pushed&per_page=100&type=all")
         .bearer_auth(&token)
-        .header("User-Agent", "dev-radio")
+        .header("User-Agent", "tiny-bell")
         .header("Accept", "application/vnd.github+json")
         .send()
         .await

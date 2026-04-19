@@ -61,7 +61,7 @@ export function CloseHintDialog({ open, onOpenChange }: Props) {
             className="font-display text-[15px] font-semibold text-foreground"
             style={{ letterSpacing: -0.2 }}
           >
-            Dev Radio is still listening.
+            Tiny Bell is still listening.
           </h2>
           <p className="mt-[6px] text-[12.5px] leading-[1.55] text-muted-foreground">
             Closing this window doesn't quit the app — it just tucks back into

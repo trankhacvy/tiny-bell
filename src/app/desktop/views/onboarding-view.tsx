@@ -72,7 +72,7 @@ export function OnboardingView({
 
   return (
     <DRWindow
-      title="Dev Radio"
+      title="Tiny Bell"
       titleRight={
         hasAccounts ? (
           <DRButton
@@ -143,7 +143,7 @@ function WelcomeStep({ onPick, onSkip }: WelcomeStepProps) {
           Let's get you connected.
         </h1>
         <p className="mb-6 max-w-[380px] text-[13px] leading-[1.5] text-muted-foreground">
-          Dev Radio watches your deploys so you don't have to. Pick a provider
+          Tiny Bell watches your deploys so you don't have to. Pick a provider
           to start — you can add more later.
         </p>
 
@@ -309,7 +309,7 @@ function ConnectStep({ platform, onConnected, onBack, onCancel }: ConnectStepPro
               </li>
               <li>
                 Create a token named{" "}
-                <strong className="font-medium text-foreground">Dev Radio</strong>
+                <strong className="font-medium text-foreground">Tiny Bell</strong>
               </li>
               <li>Paste it above. Stored in Keychain.</li>
             </ol>
@@ -357,7 +357,7 @@ function SuccessStep({ connected, projects, onDone, onAddAnother }: SuccessStepP
           <strong className="font-semibold text-foreground">
             {projects.length} project{projects.length !== 1 ? "s" : ""}
           </strong>{" "}
-          across your accounts. Dev Radio will check them every 30 seconds.
+          across your accounts. Tiny Bell will check them every 30 seconds.
         </p>
 
         {connected.length > 0 && (
