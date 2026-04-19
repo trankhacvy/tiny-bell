@@ -3,6 +3,7 @@ pub mod pat;
 pub mod railway;
 pub mod token_provider;
 pub mod vercel;
+pub mod github;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {

@@ -1,1531 +1,1296 @@
-# Dev Radio UI — Design Alignment Plan
+# Plan — GitHub Actions Monitoring
 
-This plan covers every gap between the current implementation and the design reference (`Dev Radio Design _standalone_.html`). Items are ordered by blast radius — biggest visual impact first.
-
----
-
-## 1. Deploy Row — Complete Rebuild ✅
-
-**Files:** `src/components/popover/deploy-row.tsx`
-
-The row is the single most-repeated element in the app. The current layout is structurally wrong. The design specifies a strict 2-line layout; the current code renders a 1-title + 1-flat-meta structure.
-
-### Design spec (exact)
-
-```
-Row: padding 9px 14px, border-b border-s, hover:bg-hover
-  Left accent bar: 2px wide, top 4 / bottom 4, visible only when focused
-
-Line 1 (flex row, items-center, gap 6):
-  [StatusGlyph 12px]  [project-name fw-600 13px truncate]
-  [EnvPill]  [DomainTag or ServiceBadge]  [flex-1]  [time mono 11px shrink-0]
-
-Line 2 (flex row, items-center, gap 6, mt 3):
-  [AuthorAvatar 13px]  [commit-message 12px text-2 truncate flex-1]
-  [branch mono 10.5px text-3 max-w-[90px] truncate shrink-0]
-
-Expand panel (visible when row is focused, indent paddingLeft 22):
-  [Open site btn secondary sm]  [Logs btn ghost sm]  [flex-1]
-  [↵ open hint]  [⇧↵ logs hint]
-```
-
-### New sub-components to add inside `deploy-row.tsx`
-
-#### `EnvPill`
-```tsx
-function EnvPill({ env }: { env: string }) {
-  const isProd = env === "production" || env === "prod"
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-[3px] border px-[5px] py-[1px] text-[10px] font-semibold uppercase tracking-[0.5px]",
-        isProd
-          ? "border-border bg-surface-2 text-foreground"
-          : "border-border bg-transparent text-faint"
-      )}
-    >
-      {isProd ? "prod" : env}
-    </span>
-  )
-}
-```
-
-#### `DomainTag` (Vercel only)
-```tsx
-function DomainTag({ domain }: { domain: string }) {
-  return (
-    <span className="max-w-[140px] truncate font-mono-tabular text-[10.5px] text-faint">
-      {domain}
-    </span>
-  )
-}
-```
-
-#### `ServiceBadge` (Railway only)
-```tsx
-function ServiceBadge({ name }: { name: string }) {
-  // deterministic hue from service name
-  const hue = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360
-  const bg = `oklch(0.93 0.035 ${hue})`
-  const fg = `oklch(0.38 0.12 ${hue})`
-  return (
-    <span
-      className="inline-flex max-w-[120px] shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] px-[6px] py-0 font-mono-tabular text-[10.5px] font-semibold"
-      style={{ height: 17, background: bg, color: fg }}
-    >
-      <span className="size-[5px] shrink-0 rounded-[1px]" style={{ background: fg }} />
-      {name}
-    </span>
-  )
-}
-```
-
-#### Author avatar
-```tsx
-function AuthorAvatar({ name }: { name: string }) {
-  // reuse InitialsAvatar at 13px
-  return <InitialsAvatar name={name} size={13} />
-}
-```
-
-### New `DeployRow` component
-
-```tsx
-export function DeployRow({ deployment, project, focused }: DeployRowProps) {
-  const target = deployment.inspector_url ?? deployment.url
-  const commitMsg = deployment.commit_message?.split("\n")[0]?.trim() ?? null
-  const branch = deployment.branch ?? null
-  const author = deployment.author_name ?? null
-  const time = formatRelative(deployment.created_at)
-  const isPlatform = (p: Platform) => project?.platform === p
-
-  const meta = isPlatform("railway") && deployment.service_name ? (
-    <>
-      <ServiceBadge name={deployment.service_name} />
-      <EnvPill env={deployment.environment} />
-    </>
-  ) : (
-    <>
-      <EnvPill env={deployment.environment} />
-      {project?.url ? <DomainTag domain={stripProtocol(project.url)} /> : null}
-    </>
-  )
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      data-deploy-row
-      data-deploy-id={deployment.id}
-      onClick={() => target && void openUrl(target)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); target && void openUrl(target) }
-        if (e.key === "Enter" && e.shiftKey) {
-          e.preventDefault()
-          const logs = deployment.inspector_url ?? deployment.url
-          if (logs) void openUrl(logs)
-        }
-      }}
-      className={cn(
-        "relative cursor-default border-b border-border-subtle px-[14px] py-[9px] outline-none last:border-b-0",
-        focused ? "bg-hover" : "hover:bg-hover",
-      )}
-    >
-      {focused && (
-        <span className="absolute top-1 bottom-1 left-0 w-[2px] rounded-[1px] bg-foreground" />
-      )}
-
-      {/* Line 1 */}
-      <div className="flex min-w-0 items-center gap-[6px]">
-        <StatusGlyph status={deployment.state} size={12} />
-        <span className="truncate text-[13px] font-semibold leading-none text-foreground" style={{ letterSpacing: -0.1 }}>
-          {project?.name ?? deployment.project_id}
-        </span>
-        {meta}
-        <span className="flex-1" />
-        <span className="shrink-0 font-mono-tabular text-[11px] text-faint">{time}</span>
-      </div>
-
-      {/* Line 2 */}
-      <div className="mt-[3px] flex min-w-0 items-center gap-[6px]">
-        {author && <AuthorAvatar name={author} />}
-        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-          {commitMsg ?? branch ?? "—"}
-        </span>
-        {branch && (
-          <span className="max-w-[90px] shrink-0 truncate font-mono-tabular text-[10.5px] text-faint">
-            {branch}
-          </span>
-        )}
-      </div>
-
-      {/* Expand panel */}
-      {focused && (
-        <div className="mt-[8px] flex items-center gap-[6px] pl-[22px]">
-          <DRButton variant="secondary" size="sm" leading={<Icon name="external" size={11} />}
-            className="h-6 px-[9px] text-[11.5px]"
-            onClick={(e) => { e.stopPropagation(); target && void openUrl(target) }}>
-            Open site
-          </DRButton>
-          <DRButton variant="ghost" size="sm" leading={<Icon name="external" size={11} />}
-            className="h-6 px-2 text-[11.5px]"
-            onClick={(e) => { e.stopPropagation(); deployment.inspector_url && void openUrl(deployment.inspector_url) }}>
-            Logs
-          </DRButton>
-          <span className="flex-1" />
-          <span className="flex items-center gap-1 text-[10.5px] text-faint">
-            <Kbd className="h-[14px] min-w-[14px] text-[9px]">↵</Kbd>
-            <span>open</span>
-            <Kbd className="ml-1 h-[14px] min-w-[14px] text-[9px]">⇧↵</Kbd>
-            <span>logs</span>
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-```
-
-**`focused` state management** — add to `popover-app.tsx`: track `focusedId` alongside the existing arrow-key `moveFocus` logic. When arrow keys move focus to a `[data-deploy-row]` element, set `focusedId` to its `data-deploy-id`. Pass `focused={deployment.id === focusedId}` to each `<DeployRow>`.
+Add GitHub Actions workflow run monitoring as a third platform alongside Vercel and Railway. Users connect via **OAuth or PAT** (same dual-mode UI), optionally select repositories to monitor, and see workflow runs in the existing deployment feed. This plan is written against the actual code — all file paths, line numbers, and code snippets reference the current codebase.
 
 ---
 
-## 2. Account Group Headers in the Deployment List ✅
+## 1. GitHub Actions API summary
 
-**Files:** `src/app/popover/popover-app.tsx`
-
-Currently a flat `<ul>`. The design groups deployments by account with a sticky group header.
-
-### New `AccountGroupHeader` component
-
-Create `src/components/popover/account-group-header.tsx`:
-
-```tsx
-import { ProviderMark } from "@/components/dr/provider-mark"
-import type { Platform } from "@/lib/accounts"
-
-type Props = {
-  label: string          // e.g. "Sundial Labs · Vercel"
-  platform: Platform
-  count: number
-}
-
-export function AccountGroupHeader({ label, platform, count }: Props) {
-  return (
-    <div className="flex items-center gap-[7px] px-[14px] pb-1 pt-[10px]">
-      <ProviderMark platform={platform} size={11} className="shrink-0 text-faint" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-        {label}
-      </span>
-      <span className="font-mono-tabular text-[10px] font-medium text-faint opacity-70">
-        · {count}
-      </span>
-    </div>
-  )
-}
-```
-
-### Grouping logic in `popover-app.tsx`
-
-Replace the flat `<ul>` render with grouped sections:
-
-```tsx
-// Build groups: [{ account, deployments[] }]
-const groups = useMemo(() => {
-  const accountMap = new Map(accounts.map((a) => [a.id, a]))
-  const byAccount = new Map<string, Deployment[]>()
-
-  for (const d of filteredDeployments) {
-    const project = projectsById.get(d.project_id)
-    if (!project) continue
-    const list = byAccount.get(project.account_id) ?? []
-    list.push(d)
-    byAccount.set(project.account_id, list)
-  }
-
-  return [...byAccount.entries()]
-    .map(([accountId, deps]) => ({
-      account: accountMap.get(accountId) ?? null,
-      deployments: deps,
-    }))
-    .filter((g) => g.account !== null)
-}, [filteredDeployments, accounts, projectsById])
-
-// In JSX:
-<div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-  {/* ... state guards ... */}
-  {groups.map(({ account, deployments }) => (
-    <section key={account!.id}>
-      <AccountGroupHeader
-        label={account!.display_name}
-        platform={account!.platform}
-        count={deployments.length}
-      />
-      {deployments.map((d) => (
-        <DeployRow
-          key={`${d.project_id}:${d.id}`}
-          deployment={d}
-          project={projectsById.get(d.project_id) ?? null}
-          focused={d.id === focusedId}
-        />
-      ))}
-    </section>
-  ))}
-</div>
-```
+- **Base URL**: `https://api.github.com`
+- **Auth**: `Authorization: Bearer {token}` + **required** `User-Agent: dev-radio` header (GitHub rejects requests without User-Agent)
+- **Key endpoints**:
+  - `GET /user` — validate token, get profile (login, name, email, avatar_url)
+  - `GET /user/repos?sort=pushed&per_page=30` — list repos user has push access to, most recently pushed first
+  - `GET /repos/{owner}/{repo}/actions/runs?per_page=10` — list recent workflow runs for a repo
+- **Rate limit**: 5,000 req/hour for authenticated users. Returns `x-ratelimit-remaining` and `x-ratelimit-reset` headers. Rate-limited requests return **403** (not 429) with `x-ratelimit-remaining: 0`.
+- **OAuth flow**: Standard authorization code grant (same as Railway):
+  - Authorize: `https://github.com/login/oauth/authorize`
+  - Token: `https://github.com/login/oauth/access_token`
+  - GitHub OAuth tokens **do not expire** — no refresh token, same treatment as Vercel.
+  - Register an OAuth App at `https://github.com/settings/developers`
+  - Scopes: `repo read:user`
 
 ---
 
-## 3. Popover Header — Health Summary Pill ✅
+## 2. Current state of the codebase
 
-**Files:** `src/components/popover/popover-header.tsx`
-
-The header must show a health summary pill (colored capsule with text) rather than account navigation. Account/project filtering moves to a separate `FilterBar` below it (see §4).
-
-### New header structure
-
-```tsx
-type Tone = "healthy" | "building" | "broken"
-
-function deriveHeaderTone(deployments: Deployment[]): Tone {
-  if (deployments.some((d) => d.state === "error")) return "broken"
-  if (deployments.some((d) => d.state === "building" || d.state === "queued")) return "building"
-  return "healthy"
-}
-
-function buildSummary(deployments: Deployment[], tone: Tone): string {
-  if (deployments.length === 0) return "All ready"
-  const errors = deployments.filter((d) => d.state === "error").length
-  const building = deployments.filter((d) => d.state === "building" || d.state === "queued").length
-  const ready = deployments.filter((d) => d.state === "ready").length
-  if (tone === "broken") return `${errors} error${errors > 1 ? "s" : ""} · ${ready} ready`
-  if (tone === "building") return `${building} building · ${ready} ready`
-  return "All ready"
-}
-
-export function PopoverHeader({ deployments, refreshing, onRefresh, onOpenDesktop }: Props) {
-  const tone = deriveHeaderTone(deployments)
-
-  const toneColor =
-    tone === "broken" ? "var(--red)" :
-    tone === "building" ? "var(--amber)" :
-    "var(--green)"
-
-  const toneBg =
-    tone === "broken"   ? "color-mix(in oklch, var(--red) 14%, transparent)" :
-    tone === "building" ? "color-mix(in oklch, var(--amber) 18%, transparent)" :
-                          "color-mix(in oklch, var(--green) 14%, transparent)"
-
-  return (
-    <header className="flex h-[42px] shrink-0 items-center gap-2 border-b border-border-subtle bg-surface px-[14px] py-[10px]">
-      {/* Health pill */}
-      <div
-        className="inline-flex h-[22px] items-center gap-[7px] rounded-full px-[8px] text-[11.5px] font-semibold"
-        style={{ background: toneBg, color: toneColor }}
-      >
-        <span
-          className="size-[7px] shrink-0 rounded-full"
-          style={{
-            background: toneColor,
-            animation: tone === "building" ? "dr-pulse-dot 1.4s ease-in-out infinite" : "none",
-          }}
-        />
-        {buildSummary(deployments, tone)}
-      </div>
-      <span className="flex-1" />
-      {/* Refresh */}
-      <IconButton
-        name="refresh"
-        size={13}
-        tooltip="Refresh (⌘R)"
-        className={refreshing ? "animate-spin" : undefined}
-        onClick={onRefresh}
-      />
-      {/* Open desktop */}
-      <IconButton
-        name="external"
-        size={12}
-        tooltip="Open Dev Radio"
-        onClick={onOpenDesktop}
-      />
-    </header>
-  )
-}
-```
-
-Add `dr-pulse-dot` keyframe to `index.css`:
-```css
-@keyframes dr-pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-  50%       { box-shadow: 0 0 0 3px transparent; opacity: 0.7; }
-}
-```
-
-**Update `popover-app.tsx`** to pass `deployments={filteredDeployments}` and remove the old `accounts`/`scope`/`projects` props from `PopoverHeader`. Those props move to `FilterBar`.
+| Concern | File | Current behavior |
+|---|---|---|
+| Platform enum | `src-tauri/src/adapters/mod.rs:10-15` | `Vercel` and `Railway` variants. `key()` and `from_key()` match on those two. |
+| DeploymentMonitor trait | `src-tauri/src/adapters/trait.rs:30-38` | `platform()`, `account_id()`, `list_projects()`, `list_recent_deployments()`. Generic — ready for a third impl. |
+| Adapter registry | `src-tauri/src/adapters/registry.rs:37-49` | Match on `Platform::Vercel` and `Platform::Railway` in `hydrate()`. Passes `account_id`, `token`, `scope_id`. |
+| OAuth helpers | `src-tauri/src/auth/oauth.rs` | Generic PKCE, state generation, loopback server on ports 53123-53125. Fully reusable. |
+| PAT connect | `src-tauri/src/auth/pat.rs:16-19` | Matches `Platform::Vercel` and `Platform::Railway`. Needs a third arm. |
+| Token provider | `src-tauri/src/auth/token_provider.rs:23-38` | Handles Railway refresh, Vercel pass-through. Needs a GitHub pass-through arm. |
+| start_oauth command | `src-tauri/src/commands/accounts.rs:57-65` | Matches `"vercel"` and `"railway"`. Needs `"github"`. |
+| validate_token command | `src-tauri/src/commands/accounts.rs:170-173` | Matches `Platform::Vercel` and `Platform::Railway`. Needs `Platform::GitHub`. |
+| Build env injection | `src-tauri/build.rs:22-48` | Injects Vercel + Railway env vars. Needs `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`. |
+| StoredAccount | `src-tauri/src/store.rs:24-34` | Has `scope_id: Option<String>` but no `monitored_repos` field. |
+| delete_account | `src-tauri/src/store.rs:71-84` | Hard-codes `[Platform::Vercel, Platform::Railway]` for keychain cleanup. |
+| Keychain vault | `src-tauri/src/keychain.rs` | Uses `StoredSecret::Pat` or `StoredSecret::Oauth`. GitHub will use `Pat` (tokens don't expire). |
+| CSP | `src-tauri/tauri.conf.json:48` | `connect-src` has Vercel + Railway APIs. Needs `https://api.github.com https://github.com`. |
+| Capabilities | `src-tauri/capabilities/default.json:17-21` | `opener:allow-open-url` has Vercel + Railway. Needs `https://github.com/*`. |
+| Frontend Platform type | `src/lib/accounts.ts:1` | `type Platform = "vercel" \| "railway"`. Needs `"github"`. |
+| PLATFORM_LABEL | `src/lib/accounts.ts:106-109` | Two entries. Needs `github: "GitHub"`. |
+| TOKEN_LINKS | `src/components/account/add-account-form.tsx:27-42` | Config for Vercel + Railway token URLs. Needs GitHub entry. |
+| OAUTH_BUTTON_LABEL | `src/components/account/add-account-form.tsx:44-47` | Two entries. Needs `github`. |
+| Provider mark | `src/components/dr/provider-mark.tsx:1-19` | Imports vercel.svg and railway.svg. Needs github.svg. |
+| Provider chip | `src/components/dr/provider-chip.tsx:19-22` | `ACCENT_VAR` for vercel and railway. Needs github accent. |
+| Add-account dialog | `src/components/account/add-account-dialog.tsx:24,58` | `PLATFORMS` array is `["vercel", "railway"]`. Needs `"github"`. |
+| Onboarding welcome | `src/app/desktop/views/onboarding-view.tsx:138` | Grid renders `["vercel", "railway"]`. Needs `"github"`. |
+| Onboarding connect text | `src/app/desktop/views/onboarding-view.tsx:188-189` | Per-platform copy. Only covers vercel/railway. |
+| Settings accounts | `src/app/desktop/views/settings/accounts-tab.tsx` | Shows accounts list. GitHub accounts need a "Manage repos" action. |
+| CSS accent vars | `src/index.css:43-45` | Has `--accent-vercel-*` and `--accent-railway-*`. Needs `--accent-github-*`. |
+| Provider SVG assets | `src/assets/providers/` | `vercel.svg` and `railway.svg`. Needs `github.svg`. |
+| .env.example | `.env.example` | Vercel vars only. Needs GitHub vars. |
 
 ---
 
-## 4. Separate Filter Bar Component ✅
+## 3. Design decisions
 
-**Files:** Create `src/components/popover/filter-bar.tsx`, update `popover-app.tsx`
+### 3.1 OAuth + PAT (matching Vercel & Railway)
 
-The filter bar is a distinct row below the header, always visible when accounts exist.
+We implement both auth paths, consistent with the other two platforms. The infrastructure is already built:
 
-```tsx
-// src/components/popover/filter-bar.tsx
+- **OAuth**: GitHub OAuth App uses a standard authorization code flow. We reuse `oauth::spawn_loopback_server`, `generate_pkce`, `generate_state`. GitHub doesn't require PKCE but we can include `state` for CSRF protection. Tokens don't expire — store as `StoredSecret::Pat` (same as Vercel).
+- **PAT**: User pastes `ghp_...` (classic) or `github_pat_...` (fine-grained). We validate via `GET /user`.
 
-type Props = {
-  accounts: AccountRecord[]
-  scope: Scope
-  onScopeChange: (s: Scope) => void
-  projects: Project[]
-  selectedProjectIds: Set<string>
-  onSelectedProjectIdsChange: (next: Set<string>) => void
-}
+### 3.2 Repository selection
 
-export function FilterBar({ accounts, scope, onScopeChange, projects, selectedProjectIds, onSelectedProjectIdsChange }: Props) {
-  const [accountOpen, setAccountOpen] = useState(false)
-  const current = scope === "all" ? null : accounts.find((a) => a.id === scope) ?? null
+**The problem**: Vercel/Railway auto-discover all projects (~10-50). GitHub users can access hundreds of repos, most without relevant Actions workflows.
 
-  const allProjects = selectedProjectIds.size === 0 || selectedProjectIds.size === projects.length
-  const projectLabel = allProjects
-    ? "All projects"
-    : selectedProjectIds.size === 1
-      ? "1 project"
-      : `${selectedProjectIds.size} projects`
+**Solution**: Add an optional `monitored_repos: Option<Vec<String>>` field to `StoredAccount`. For GitHub, the adapter's `list_projects()` returns only repos in this list. For Vercel/Railway, this field stays `None` and behavior is unchanged.
 
-  return (
-    <div className="flex shrink-0 items-center gap-[6px] border-b border-border-subtle bg-surface px-[10px] py-[8px]">
-      {/* Account picker — flex-1 */}
-      <AccountPicker
-        accounts={accounts}
-        scope={scope}
-        onScopeChange={onScopeChange}
-        open={accountOpen}
-        onOpenChange={setAccountOpen}
-        current={current}
-      />
-      {/* Project multi-select — max-w-[140px] */}
-      <ProjectFilter
-        projects={projects}
-        selected={selectedProjectIds}
-        onChange={onSelectedProjectIdsChange}
-        label={projectLabel}
-        count={allProjects ? 0 : selectedProjectIds.size}
-      />
-    </div>
-  )
-}
+- On first connect, auto-populate with repos that have recent pushes (top 30 by `pushed_at`).
+- Provide a "Manage repos" UI in Settings to add/remove repos.
+- Cap at 30 repos per account to bound API calls.
+
+### 3.3 Rate limit handling
+
+At 30 repos, each poll = ~31 requests. At 30s interval = 120 polls/hour = ~3,720 req/hour (under 5k limit).
+
+GitHub returns `403` (not `429`) when rate-limited. We detect via `x-ratelimit-remaining: 0` on 403 responses and convert to `AdapterError::RateLimited(retry_after)` using the `x-ratelimit-reset` header. The existing per-account cooldown in `poller.rs:162-185` handles the rest.
+
+### 3.4 Domain model mapping
+
 ```
-
-### `AccountPicker` button inside `FilterBar`
-
-```tsx
-function AccountPicker({ accounts, scope, onScopeChange, open, onOpenChange, current }) {
-  return (
-    <DRMenu open={open} onOpenChange={onOpenChange} trigger={
-      <button
-        type="button"
-        className={cn(
-          "flex h-[28px] min-w-0 flex-1 items-center gap-[7px] rounded-[6px] border px-[8px] outline-none",
-          open ? "border-faint bg-hover" : "border-border bg-transparent hover:bg-hover",
-        )}
-      >
-        <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] border border-border bg-surface-2">
-          <ProviderMark
-            platform={current?.platform ?? (accounts[0]?.platform ?? "vercel")}
-            size={10}
-          />
-        </span>
-        <span className="min-w-0 flex-1 truncate text-left text-[12.5px] font-semibold text-foreground" style={{ letterSpacing: -0.1 }}>
-          {current ? current.display_name : "All accounts"}
-        </span>
-        <Icon name="chevron-down" size={11} className="shrink-0 text-faint" />
-      </button>
-    }>
-      {/* All accounts option */}
-      <DRMenuItem onSelect={() => onScopeChange("all")}>
-        <span className="flex items-center gap-[10px]">
-          <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[5px] border border-border bg-surface-2">
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-muted-foreground">
-              <circle cx="3.5" cy="3.5" r="1.5"/><circle cx="7.5" cy="3.5" r="1.5"/>
-              <circle cx="3.5" cy="7.5" r="1.5"/><circle cx="7.5" cy="7.5" r="1.5"/>
-            </svg>
-          </span>
-          <span className="flex flex-col">
-            <span className="text-[12.5px] font-semibold">All accounts</span>
-            <span className="text-[11px] text-faint">{accounts.length} connected · all deploys</span>
-          </span>
-        </span>
-        {scope === "all" && <Icon name="check" size={13} className="ml-auto text-foreground" />}
-      </DRMenuItem>
-      <DRMenuSeparator />
-      {/* Group by provider */}
-      {(["vercel", "railway"] as Platform[]).map((p) => {
-        const group = accounts.filter((a) => a.platform === p)
-        if (group.length === 0) return null
-        return (
-          <React.Fragment key={p}>
-            <DRMenuLabel>{p === "vercel" ? "Vercel" : "Railway"}</DRMenuLabel>
-            {group.map((acc) => (
-              <DRMenuItem key={acc.id} onSelect={() => onScopeChange(acc.id)}>
-                <span className="flex items-center gap-[10px]">
-                  <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[5px] border border-border bg-surface-2">
-                    <ProviderMark platform={acc.platform} size={11} />
-                  </span>
-                  <span className="flex flex-col">
-                    <span className="text-[12.5px] font-medium">{acc.display_name}</span>
-                    <span className="flex items-center gap-1 text-[11px] text-faint">
-                      {acc.health === "needs_reauth" && <span className="size-[5px] shrink-0 rounded-full" style={{ background: "var(--amber)" }} />}
-                      {acc.health === "revoked" && <span className="size-[5px] shrink-0 rounded-full" style={{ background: "var(--red)" }} />}
-                    </span>
-                  </span>
-                </span>
-                {scope === acc.id && <Icon name="check" size={13} className="ml-auto" />}
-              </DRMenuItem>
-            ))}
-          </React.Fragment>
-        )
-      })}
-      <DRMenuSeparator />
-      <DRMenuItem onSelect={() => void windowApi.openDesktop("onboarding")}>
-        <Icon name="plus" size={12} /> Add account…
-      </DRMenuItem>
-    </DRMenu>
-  )
-}
-```
-
-### Restyle `ProjectFilter` to match the design button
-
-The current `ProjectFilter` uses a rounded pill. Replace trigger styling:
-```tsx
-// Change trigger button className from rounded-full pill to:
-className={cn(
-  "flex h-[28px] max-w-[140px] items-center gap-[6px] rounded-[6px] border px-[8px] outline-none",
-  open ? "border-faint bg-hover" : "border-border bg-transparent hover:bg-hover",
-)}
-```
-
-And change the icon from `filter` to the folder SVG from the design:
-```tsx
-<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" className="shrink-0 text-muted-foreground">
-  <path d="M1 3 h4 l1 1 h5 v6 h-10 z"/>
-</svg>
-```
-
-Add count badge when projects are filtered:
-```tsx
-{!allProjects && (
-  <span className="min-w-[14px] rounded-full bg-foreground px-[5px] py-0 text-center text-[9.5px] font-semibold text-surface">
-    {selectedProjectIds.size}
-  </span>
-)}
-```
-
-### Wire everything in `popover-app.tsx`
-
-```tsx
-// After <PopoverHeader> and before the list:
-{hasAccounts && (
-  <FilterBar
-    accounts={accounts}
-    scope={scope}
-    onScopeChange={setScope}
-    projects={scopedProjects}
-    selectedProjectIds={selectedProjectIds}
-    onSelectedProjectIdsChange={setSelectedProjectIds}
-  />
-)}
-```
-
----
-
-## 5. Popover Footer ✅
-
-**Files:** `src/components/popover/popover-footer.tsx`
-
-### Changes
-
-1. Add green status dot on the left
-2. Add "Every {interval}" text
-3. Remove `⌘,` and `⌘Q` shortcut hints (design only shows `⌘R`)
-
-```tsx
-type PopoverFooterProps = {
-  lastRefreshedAt: number | null
-  offline?: boolean
-  intervalLabel?: string   // e.g. "30s", "1m" — pass from prefs
-}
-
-export function PopoverFooter({ lastRefreshedAt, offline, intervalLabel = "30s" }: PopoverFooterProps) {
-  return (
-    <footer className="flex h-[36px] shrink-0 items-center gap-2 border-t border-border-subtle bg-surface px-[14px]">
-      {/* Status dot */}
-      <span
-        className="size-[5px] shrink-0 rounded-full opacity-80"
-        style={{ background: offline ? "var(--amber)" : "var(--green)" }}
-      />
-      <span className="truncate text-[11px] text-faint">
-        {offline
-          ? "Offline"
-          : lastRefreshedAt
-            ? `Updated ${formatRelative(lastRefreshedAt)}`
-            : "Connecting…"}
-      </span>
-      {!offline && (
-        <>
-          <span className="text-[11px] text-faint/50">·</span>
-          <span className="shrink-0 text-[11px] text-faint">Every {intervalLabel}</span>
-        </>
-      )}
-      <span className="flex-1" />
-      <span className="flex shrink-0 items-center gap-1 text-[10.5px] text-faint">
-        <Kbd className="h-[14px] min-w-[14px] text-[9px]">⌘</Kbd>
-        <Kbd className="h-[14px] min-w-[14px] text-[9px]">R</Kbd>
-        <span className="ml-1">refresh</span>
-      </span>
-    </footer>
-  )
-}
-```
-
-**Pass `intervalLabel`** from `popover-app.tsx` by reading `prefs.refresh_interval_ms` and converting to a label string:
-```tsx
-function msToLabel(ms: number): string {
-  if (ms < 60_000) return `${ms / 1000}s`
-  return `${ms / 60_000}m`
+GitHub Repository  →  Project { id: "owner/repo", name: "repo" }
+GitHub Workflow Run  →  Deployment {
+    service_id: workflow_id,
+    service_name: workflow_name,
+    environment: event_type (push, pull_request, etc.),
 }
 ```
 
 ---
 
-## 6. Popover State Screens ✅
+## 4. Changes — file by file
 
-### 6a. Empty State — `src/components/popover/states/empty.tsx`
+### 4.1 New Rust files
 
-```tsx
-export function PopoverEmpty() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
-      <div className="mb-[14px] flex size-[44px] items-center justify-center rounded-full border border-dashed border-border text-faint">
-        <Icon name="dot" size={14} />
-      </div>
-      <p className="mb-1 text-[13px] font-semibold text-foreground">
-        Suspiciously quiet.
-      </p>
-      <p className="max-w-[240px] text-[12px] leading-[1.5] text-muted-foreground">
-        Your accounts are connected but no deployments have landed yet. Push
-        something and we'll start listening.
-      </p>
-    </div>
-  )
-}
-```
+#### `src-tauri/src/auth/github.rs`
 
-### 6b. No Accounts State — `src/components/popover/states/no-accounts.tsx`
-
-```tsx
-export function PopoverNoAccounts() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
-      <div className="mb-[14px]">
-        {/* Dev Radio wordmark — radio wave SVG */}
-        <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-faint">
-          <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
-          <path d="M5 5 Q3 8 5 11" /><path d="M11 5 Q13 8 11 11" />
-          <path d="M2.5 3 Q-0.5 8 2.5 13" opacity="0.5"/>
-          <path d="M13.5 3 Q16.5 8 13.5 13" opacity="0.5"/>
-        </svg>
-      </div>
-      <p className="mb-[6px] text-[16px] font-semibold text-foreground" style={{ letterSpacing: -0.2 }}>
-        Nothing to listen to.
-      </p>
-      <p className="mb-[16px] max-w-[260px] text-[12px] leading-[1.5] text-muted-foreground">
-        Connect a Vercel or Railway account and Dev Radio will start tracking
-        your deploys.
-      </p>
-      <DRButton
-        variant="primary"
-        size="sm"
-        leading={<Icon name="external" size={12} />}
-        onClick={() => void windowApi.openDesktop("onboarding")}
-      >
-        Open Dev Radio
-      </DRButton>
-    </div>
-  )
-}
-```
-
-### 6c. Offline State — `src/components/popover/states/offline.tsx`
-
-The offline state must **not** replace the list. Instead it renders an amber banner at the top while showing stale deployments below at reduced opacity. This requires lifting the pattern into `popover-app.tsx`.
-
-**Change `popover-app.tsx`** render logic:
-
-```tsx
-// Instead of: state.offline ? <PopoverOffline /> : ...
-// Do:
-<div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-  {state.offline && <OfflineBanner lastRefreshedAt={state.last_refreshed_at} />}
-  <div className={state.offline ? "opacity-65 pointer-events-none" : ""}>
-    {/* normal grouped list */}
-  </div>
-</div>
-```
-
-Create `src/components/popover/states/offline-banner.tsx`:
-
-```tsx
-export function OfflineBanner({ lastRefreshedAt }: { lastRefreshedAt: number | null }) {
-  const ago = lastRefreshedAt ? formatRelative(lastRefreshedAt) : null
-  return (
-    <div
-      className="flex shrink-0 items-start gap-[8px] border-b px-[14px] py-[10px]"
-      style={{
-        background: "color-mix(in oklch, var(--amber) 14%, transparent)",
-        borderColor: "color-mix(in oklch, var(--amber) 30%, transparent)",
-      }}
-    >
-      <Icon name="warning" size={13} className="mt-px shrink-0 text-warning" />
-      <div className="flex-1">
-        <p className="text-[12px] font-semibold text-foreground">Can't reach the provider</p>
-        <p className="mt-0.5 text-[11.5px] leading-[1.4] text-muted-foreground">
-          {ago
-            ? `Showing last-known snapshot from ${ago}.`
-            : "Network unavailable."}
-        </p>
-      </div>
-      <DRButton
-        variant="ghost"
-        size="sm"
-        className="h-[22px] px-[6px] text-[11px]"
-        onClick={() => void deploymentsApi.refreshNow()}
-      >
-        Retry
-      </DRButton>
-    </div>
-  )
-}
-```
-
-### 6d. Rate Limit State — `src/components/popover/states/rate-limit.tsx`
-
-Same banner-not-replacement pattern. Change from full-screen to a thin banner at top:
-
-```tsx
-export function RateLimitBanner() {
-  return (
-    <div className="flex shrink-0 items-center gap-[8px] border-b border-border-subtle bg-surface-2 px-[14px] py-[9px]">
-      <Icon name="clock" size={12} className="shrink-0 text-muted-foreground" />
-      <span className="flex-1 text-[11.5px] text-muted-foreground">
-        Rate-limited by provider — backing off. Retry soon.
-      </span>
-    </div>
-  )
-}
-```
-
-### 6e. Loading State — `src/components/popover/states/loading.tsx`
-
-Add the "Tuning in…" header row and expand to 6 skeleton rows:
-
-```tsx
-export function PopoverLoading() {
-  const SkeletonRow = () => (
-    <div className="flex items-center gap-[10px] border-b border-border-subtle px-[14px] py-[10px]">
-      <span className="size-3 shrink-0 rounded-full bg-surface-2" />
-      <div className="flex flex-1 flex-col gap-[5px]">
-        <span className="h-[10px] w-[55%] rounded-[3px] bg-surface-2" />
-        <span className="h-[8px] w-[80%] rounded-[3px] bg-surface-2/70" />
-      </div>
-      <span className="h-[8px] w-[30px] rounded-[3px] bg-surface-2/70" />
-    </div>
-  )
-
-  return (
-    <div className="flex flex-1 flex-col animate-pulse">
-      <div className="flex items-center gap-[8px] border-b border-border-subtle bg-surface px-[14px] py-[10px]">
-        <span
-          className="size-[10px] rounded-full border-[1.5px] border-border"
-          style={{ borderTopColor: "var(--text)", animation: "dr-spin 0.8s linear infinite" }}
-        />
-        <span className="text-[12px] text-faint">Tuning in…</span>
-      </div>
-      <SkeletonRow /><SkeletonRow /><SkeletonRow />
-      <SkeletonRow /><SkeletonRow /><SkeletonRow />
-    </div>
-  )
-}
-```
-
-Add `dr-spin` to `index.css` (may already exist; if not):
-```css
-@keyframes dr-spin { to { transform: rotate(360deg); } }
-```
-
----
-
-## 7. Onboarding — Welcome Step ✅
-
-**Files:** `src/app/desktop/views/onboarding-view.tsx`, `WelcomeStep`
-
-The current `WelcomeStep` uses a 2-column card grid. The design uses a vertical list with "Available now" / "Coming soon" sections, left-aligned layout, and a sticky bottom footer bar.
-
-### Restructure `WelcomeStep`
-
-```tsx
-const AVAILABLE: { platform: Platform; desc: string }[] = [
-  { platform: "vercel", desc: "OAuth or personal access token · Teams supported" },
-  { platform: "railway", desc: "Personal access token · Projects & environments" },
-]
-
-const COMING_SOON = [
-  { label: "Netlify", desc: "On the roadmap" },
-  { label: "Render", desc: "On the roadmap" },
-  { label: "GitHub Actions", desc: "On the roadmap" },
-]
-
-function WelcomeStep({ onPick }: WelcomeStepProps) {
-  const [selected, setSelected] = useState<Platform | null>(null)
-
-  return (
-    // Remove px-10 pt-10 from parent — use full-bleed layout
-    <div className="flex flex-1 flex-col">
-      {/* Content area */}
-      <div className="flex-1 overflow-auto px-8 pt-7 pb-4">
-        <h1 className="mb-[6px] font-display text-[22px] font-semibold text-foreground" style={{ letterSpacing: -0.4, lineHeight: 1.2 }}>
-          Let's get you connected.
-        </h1>
-        <p className="mb-6 max-w-[380px] text-[13px] leading-[1.5] text-muted-foreground">
-          Dev Radio watches your deploys so you don't have to. Pick a provider
-          to start — you can add more later.
-        </p>
-
-        {/* Available now */}
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-          Available now
-        </p>
-        <div className="mb-6 flex flex-col gap-2">
-          {AVAILABLE.map(({ platform, desc }) => {
-            const isSelected = selected === platform
-            return (
-              <button
-                key={platform}
-                type="button"
-                onClick={() => setSelected(platform)}
-                className={cn(
-                  "flex items-center gap-3 rounded-[8px] border p-[12px_14px] text-left transition-colors",
-                  isSelected
-                    ? "border-foreground bg-surface-2"
-                    : "border-border hover:bg-hover",
-                )}
-                style={{
-                  boxShadow: isSelected ? "inset 0 0 0 0.5px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-border bg-surface-2">
-                  <ProviderMark platform={platform} size={18} />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13px] font-semibold text-foreground">{PLATFORM_LABEL[platform]}</span>
-                  <span className="block text-[12px] text-faint">{desc}</span>
-                </span>
-                {isSelected && <Icon name="check" size={14} className="shrink-0 text-foreground" />}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Coming soon */}
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-          Coming soon
-        </p>
-        <div className="flex flex-col gap-2">
-          {COMING_SOON.map(({ label, desc }) => (
-            <div
-              key={label}
-              className="flex items-center gap-3 rounded-[8px] border border-border p-[12px_14px] opacity-50"
-            >
-              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-border bg-surface-2 text-[11px] font-semibold text-faint">
-                {label[0]}
-              </span>
-              <span className="flex-1">
-                <span className="block text-[13px] font-semibold text-foreground">{label}</span>
-                <span className="block text-[12px] text-faint">{desc}</span>
-              </span>
-              <DRBadge tone="neutral">Soon</DRBadge>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Sticky footer */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-subtle px-8 py-4">
-        <span className="text-[12px] text-faint">Step 1 of 3</span>
-        <div className="flex gap-2">
-          <DRButton variant="ghost" size="sm" onClick={() => onPick(["vercel"])}>
-            Skip for now
-          </DRButton>
-          <DRButton
-            variant="primary"
-            size="sm"
-            disabled={!selected}
-            trailing={<Icon name="chevron-right" size={13} />}
-            onClick={() => selected && onPick([selected])}
-          >
-            Continue with {selected ? PLATFORM_LABEL[selected] : "…"}
-          </DRButton>
-        </div>
-      </div>
-    </div>
-  )
-}
-```
-
----
-
-## 8. Onboarding — Connect Steps ✅
-
-**Files:** `src/app/desktop/views/onboarding-view.tsx`, `ConnectStep` + `src/components/account/add-account-form.tsx`
-
-### Hero strip
-
-Wrap the `ConnectStep` content with a provider-tinted hero strip at the top:
-
-```tsx
-function ConnectStep({ platform, onConnected, onSkip }: ConnectStepProps) {
-  const heroGradient = platform === "vercel"
-    ? "linear-gradient(180deg, oklch(0.97 0.003 85) 0%, var(--bg) 100%)"
-    : "linear-gradient(180deg, oklch(0.97 0.022 285) 0%, var(--bg) 100%)"
-
-  return (
-    <div className="flex flex-1 flex-col">
-      {/* Hero strip */}
-      <div
-        className="shrink-0 border-b border-border-subtle px-8 pb-[22px] pt-7"
-        style={{ background: heroGradient }}
-      >
-        <div className="mb-4 flex items-center gap-[10px]">
-          <DRButton variant="ghost" size="sm" className="h-[22px] px-[6px]"
-            leading={<Icon name="chevron-right" size={12} className="rotate-180" />}
-            onClick={onSkip}
-          >
-            Back
-          </DRButton>
-          <span className="text-[12px] text-faint">Step 2 of 3</span>
-        </div>
-        <div className="flex items-center gap-[14px]">
-          <span
-            className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-[10px] border border-border"
-            style={{ background: platform === "vercel" ? "oklch(0.98 0 0)" : "oklch(0.96 0.02 285)" }}
-          >
-            <ProviderMark platform={platform} size={22} />
-          </span>
-          <div>
-            <h1 className="font-display text-[18px] font-semibold text-foreground" style={{ letterSpacing: -0.3 }}>
-              Connect {PLATFORM_LABEL[platform]}
-            </h1>
-            <p className="mt-[2px] text-[12px] text-muted-foreground">
-              {platform === "vercel"
-                ? "Read-only access to your projects and deployments."
-                : "Paste a token. OAuth isn't supported by Railway yet."}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Form */}
-      <div className="flex-1 overflow-auto px-8 py-5">
-        <AddAccountForm platform={platform} onConnected={onConnected} />
-      </div>
-
-      {/* Footer */}
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border-subtle px-8 py-[14px]">
-        <DRButton variant="ghost" size="sm" onClick={onSkip}>Cancel</DRButton>
-        {/* The form's submit is handled internally; this is a hint button only */}
-      </div>
-    </div>
-  )
-}
-```
-
-### Token validation inline state in `AddAccountForm`
-
-**File:** `src/components/account/add-account-form.tsx`
-
-After successful token validation (before the form is submitted), show an inline green indicator in the input suffix:
-
-```tsx
-// In the token input row, add a suffix slot:
-<div className="relative">
-  <input ... className="... pr-20" />
-  {validState === "valid" && (
-    <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-      <span className="size-[6px] rounded-full" style={{ background: "var(--green)" }} />
-      <span className="text-[11px] font-medium text-success">Valid</span>
-    </span>
-  )}
-</div>
-{validState === "valid" && tokenOwner && (
-  <p className="mt-1.5 text-[11.5px] text-faint">
-    Token looks good — workspace <span className="text-muted-foreground">{tokenOwner}</span>.
-  </p>
-)}
-```
-
-### "How to get one" block for Railway
-
-```tsx
-{platform === "railway" && (
-  <div className="mt-[18px] rounded-[8px] border border-border bg-surface-2 p-[14px]">
-    <p className="mb-2 text-[12px] font-semibold text-foreground">How to get one</p>
-    <ol className="list-decimal pl-[18px] text-[12px] leading-[1.7] text-muted-foreground marker:text-faint">
-      <li>Open <code className="font-mono-tabular text-[11.5px]">railway.app/account/tokens</code></li>
-      <li>Create a token named <strong className="font-medium text-foreground">Dev Radio</strong></li>
-      <li>Paste it above. Stored in Keychain.</li>
-    </ol>
-  </div>
-)}
-```
-
----
-
-## 9. Onboarding — Success Step ✅
-
-**Files:** `src/app/desktop/views/onboarding-view.tsx`, `SuccessStep`
-
-```tsx
-function SuccessStep({ connected, projects, onDone }: SuccessStepProps) {
-  // projects is the DashboardState.projects fetched after connect
-  return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex-1 overflow-auto px-8 pt-10 pb-4">
-        <div className="mb-[16px] flex size-[52px] items-center justify-center rounded-full"
-          style={{ background: "color-mix(in oklch, var(--green) 18%, transparent)", margin: "0 auto 16px" }}>
-          <Icon name="check" size={22} className="text-success" />
-        </div>
-        <h1 className="mb-1 text-center font-display text-[20px] font-semibold text-foreground" style={{ letterSpacing: -0.3 }}>
-          You're on the air.
-        </h1>
-        <p className="mx-auto mb-5 max-w-[360px] text-center text-[13px] text-muted-foreground">
-          Found <strong className="font-semibold text-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</strong> across your accounts.
-          Dev Radio will check them every 30 seconds.
-        </p>
-
-        {/* Project preview card */}
-        {connected.length > 0 && (
-          <div className="mx-auto max-w-[420px] rounded-[8px] border border-border bg-surface">
-            <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-[9px]">
-              <ProviderMark platform={connected[0].platform} size={12} className="text-muted-foreground" />
-              <span className="text-[11.5px] font-semibold text-muted-foreground">
-                {connected[0].display_name}
-              </span>
-              <span className="flex-1" />
-              <span className="font-mono-tabular text-[11px] text-faint">
-                {projects.length} projects
-              </span>
-            </div>
-            {projects.slice(0, 5).map((p) => (
-              <div key={p.id} className="flex items-center gap-[10px] border-b border-border-subtle px-3 py-[9px] last:border-b-0">
-                <span className="size-[7px] shrink-0 rounded-full" style={{
-                  background: p.latest_deployment?.state === "error" ? "var(--red)"
-                    : p.latest_deployment?.state === "building" ? "var(--amber)"
-                    : "var(--green)"
-                }} />
-                <span className="flex-1 truncate text-[12.5px] font-medium text-foreground">{p.name}</span>
-                <span className="font-mono-tabular text-[11px] text-faint">
-                  {p.latest_deployment ? formatRelative(p.latest_deployment.created_at) : "—"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center justify-between border-t border-border-subtle px-8 py-[14px]">
-        <DRButton variant="ghost" size="sm" leading={<Icon name="plus" size={12} />}
-          onClick={() => { /* reset to connect step */ }}>
-          Add another account
-        </DRButton>
-        <DRButton variant="primary" size="sm" onClick={onDone}
-          trailing={<Kbd className="ml-1 bg-white/15 text-inherit border-white/20">⌃⌥R</Kbd>}>
-          Open menubar
-        </DRButton>
-      </div>
-    </div>
-  )
-}
-```
-
-**Note:** To populate `projects` in `SuccessStep`, fetch `deploymentsApi.getDashboard()` after `onConnected` resolves and pass `state.projects` down.
-
----
-
-## 10. Settings — Accounts Tab ✅
-
-**Files:** `src/app/desktop/views/settings/accounts-tab.tsx`
-
-### Changes
-
-1. Subtitle shows "N accounts · polling every 30s"
-2. Account rows use `DRBadge` instead of a plain dot
-3. Row adds "last sync X ago"
-4. "Add another" 2-column grid of provider buttons at the bottom
-
-```tsx
-// Header
-<header className="flex items-baseline justify-between">
-  <div>
-    <h2 className="text-[14px] font-semibold text-foreground" style={{ letterSpacing: -0.1 }}>
-      Connected accounts
-    </h2>
-    <p className="mt-0.5 text-[12px] text-faint">
-      {accounts.length} account{accounts.length !== 1 ? "s" : ""} · polling every 30s
-    </p>
-  </div>
-  <DRButton variant="secondary" size="sm" leading={<Icon name="plus" size={12} />}
-    onClick={() => setDialogOpen(true)}>
-    Add account
-  </DRButton>
-</header>
-
-// Account row — 4-column grid
-<li
-  key={acc.id}
-  className="grid items-center gap-3 border-b border-border-subtle px-[14px] py-[11px] last:border-b-0"
-  style={{ gridTemplateColumns: "28px 1fr auto auto" }}
->
-  <span className="inline-flex size-7 items-center justify-center rounded-[6px] border border-border bg-surface-2">
-    <ProviderMark platform={acc.platform} size={14} />
-  </span>
-  <div className="min-w-0">
-    <span className="block truncate text-[12.5px] font-semibold text-foreground">
-      {acc.display_name}
-    </span>
-    <span className="block text-[11.5px] text-faint">
-      {acc.email ?? PLATFORM_LABEL[acc.platform]}
-      {" · "}{/* project count if available */}
-      last sync {acc.last_synced_at ? formatRelative(acc.last_synced_at) : "—"}
-    </span>
-  </div>
-  <HealthBadge health={acc.health} />
-  <DRButton variant="ghost" size="sm" className="size-6 p-0"
-    onClick={() => openContextMenu(acc)}>
-    <Icon name="chevron-right" size={12} />
-  </DRButton>
-</li>
-
-// HealthBadge replaces HealthDot
-function HealthBadge({ health }: { health: AccountHealth }) {
-  if (health === "ok") return (
-    <DRBadge tone="success">
-      <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--green)" }} />
-      Healthy
-    </DRBadge>
-  )
-  if (health === "needs_reauth") return (
-    <DRBadge tone="warning">
-      <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--amber)" }} />
-      Token expiring
-    </DRBadge>
-  )
-  return (
-    <DRBadge tone="danger">
-      <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--red)" }} />
-      Re-auth
-    </DRBadge>
-  )
-}
-
-// "Add another" section at the bottom
-<p className="mt-[22px] mb-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-  Add another
-</p>
-<div className="grid grid-cols-2 gap-2">
-  <DRButton variant="secondary" size="sm" fullWidth
-    leading={<ProviderMark platform="vercel" size={13} />}
-    onClick={() => setDialogOpen(true)}>
-    Vercel team
-  </DRButton>
-  <DRButton variant="secondary" size="sm" fullWidth
-    leading={<ProviderMark platform="railway" size={13} />}
-    onClick={() => setDialogOpen(true)}>
-    Railway account
-  </DRButton>
-</div>
-```
-
-**Note:** `last_synced_at` is not currently on `AccountRecord`. Either add it to the Rust `AccountRecord` type and expose it, or approximate it using `state.last_refreshed_at`.
-
----
-
-## 11. Settings — General Tab ✅
-
-**Files:** `src/app/desktop/views/settings/general-tab.tsx`
-
-### Changes
-
-1. Restructure into 3 named sections with card-style rows (matching design)
-2. Add "Notify on failed deploy" and "Notify on recovery" toggles
-3. Add "Quit Dev Radio" danger-ghost button at the bottom
-4. Change Section pattern to card rows (bordered box, not `border-b` separator)
-
-```tsx
-// New Section pattern — card with rows
-function SettingsCard({ children }: { children: ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-[8px] border border-border bg-surface">
-      {children}
-    </div>
-  )
-}
-
-function SettingsRow({ title, desc, control, last }: SettingsRowProps) {
-  return (
-    <div className={cn(
-      "flex items-center gap-4 px-[14px] py-[12px]",
-      !last && "border-b border-border-subtle",
-    )}>
-      <div className="flex-1">
-        <p className="text-[12.5px] font-medium text-foreground">{title}</p>
-        {desc && <p className="mt-0.5 text-[11.5px] leading-[1.4] text-faint">{desc}</p>}
-      </div>
-      {control}
-    </div>
-  )
-}
-
-// Full layout:
-return (
-  <div className="flex flex-1 flex-col gap-[22px] overflow-auto px-5 py-5">
-    <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">Monitoring</p>
-    <SettingsCard>
-      <SettingsRow title="Polling interval"
-        desc="How often to check each provider. Lower values may hit rate limits."
-        control={<Segmented ... />}/>
-      <SettingsRow title="Notify on failed deploy"
-        desc="Native notification when a deploy goes red."
-        control={<Switch checked={prefs.notify_on_failure} onChange={(v) => void update("notify_on_failure", v)}/>}/>
-      <SettingsRow title="Notify on recovery"
-        desc="Ping me when red turns back to green."
-        control={<Switch checked={prefs.notify_on_recovery} onChange={(v) => void update("notify_on_recovery", v)}/>}
-        last/>
-    </SettingsCard>
-
-    <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">Application</p>
-    <SettingsCard>
-      <SettingsRow title="Launch at login" control={<Switch .../>}/>
-      <SettingsRow title="Show dock icon" desc="Off by default — Dev Radio lives in the menubar." control={<Switch .../>}/>
-      <SettingsRow title="Appearance" control={<Segmented .../>} last/>
-    </SettingsCard>
-
-    <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">Menubar shortcut</p>
-    <SettingsCard>
-      <SettingsRow title="Open menubar"
-        desc="Global hotkey to show the deploy list from anywhere."
-        control={<ShortcutRecorder .../>}
-        last/>
-    </SettingsCard>
-
-    <div className="flex justify-end mt-[18px]">
-      <DRButton variant="ghost" size="sm"
-        leading={<Icon name="warning" size={12} className="text-danger" />}
-        className="text-danger hover:text-danger"
-        onClick={() => void windowApi.quit()}>
-        Quit Dev Radio
-      </DRButton>
-    </div>
-  </div>
-)
-```
-
-**Prefs type update:** Add `notify_on_failure: boolean` and `notify_on_recovery: boolean` to `src/lib/prefs.ts` and the Rust `Prefs` struct in `src-tauri/src/prefs.rs`. Wire them up to the notifications module.
-
----
-
-## 12. Settings — About Tab ✅
-
-**Files:** `src/app/desktop/views/settings/about-tab.tsx`
-
-### Changes
-
-1. Replace flat layout with centered column layout
-2. Use the radio SVG icon instead of app icon
-3. Show architecture string
-4. Add DRCard-style link rows
-5. Add "Check for updates" row with `DRBadge`
-6. Add copyright footer
-
-```tsx
-export function SettingsAbout() {
-  const [version, setVersion] = useState("")
-  useEffect(() => { getVersion().then(setVersion).catch(() => {}) }, [])
-
-  return (
-    <div className="flex flex-1 flex-col items-center overflow-auto px-6 pt-7 pb-5">
-      {/* Icon */}
-      <div className="mb-[14px] flex size-[64px] items-center justify-center rounded-[14px] border border-border bg-surface-2">
-        <svg width="34" height="34" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" className="text-foreground">
-          <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
-          <path d="M5 5 Q3 8 5 11"/><path d="M11 5 Q13 8 11 11"/>
-          <path d="M2.5 3 Q-0.5 8 2.5 13" opacity="0.5"/>
-          <path d="M13.5 3 Q16.5 8 13.5 13" opacity="0.5"/>
-        </svg>
-      </div>
-
-      {/* Name + version */}
-      <h1 className="font-display text-[19px] font-semibold text-foreground" style={{ letterSpacing: -0.3 }}>
-        Dev Radio
-      </h1>
-      {version && (
-        <p className="mt-[3px] font-mono-tabular text-[12px] text-faint">
-          {version} · Apple Silicon
-        </p>
-      )}
-      <p className="mx-auto mt-[14px] max-w-[360px] text-center text-[12.5px] leading-[1.55] text-muted-foreground">
-        A quiet menubar radio for your deploys. Made by one person who
-        deploys too often.
-      </p>
-
-      {/* Link card */}
-      <div className="mt-[22px] w-full max-w-[420px] overflow-hidden rounded-[8px] border border-border bg-surface">
-        {[
-          { label: "Documentation" },
-          { label: "Release notes" },
-          { label: "Privacy statement" },
-          { label: "Send feedback" },
-        ].map((item, i, arr) => (
-          <button key={item.label} type="button"
-            onClick={() => open(item.label)}
-            className={cn(
-              "flex w-full items-center justify-between px-[14px] py-[10px] text-[12.5px] text-foreground hover:bg-hover",
-              i < arr.length - 1 && "border-b border-border-subtle",
-            )}>
-            {item.label}
-            <Icon name="external" size={12} className="text-faint" />
-          </button>
-        ))}
-        <div className="flex items-center justify-between border-t border-border-subtle px-[14px] py-[10px]">
-          <span className="text-[12.5px] text-foreground">Check for updates</span>
-          <DRBadge tone="success">
-            <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--green)" }} />
-            Up to date
-          </DRBadge>
-        </div>
-      </div>
-
-      <p className="mt-auto pt-6 text-[11px] text-faint">
-        © {new Date().getFullYear()} Dev Radio. All your deploys are belong to you.
-      </p>
-    </div>
-  )
-}
-```
-
----
-
-## 13. Close Hint Dialog ✅
-
-**Files:** `src/app/desktop/components/close-hint-dialog.tsx`
-
-### Changes
-
-1. Replace the generic `Dialog` with a custom overlay + card to match the dimmed-settings-behind aesthetic
-2. Add inline menubar SVG icon in the body text
-3. Rename "Quit now" → "Quit instead" (matches design copy)
-4. Dialog title: "Dev Radio is still listening."
-
-```tsx
-export function CloseHintDialog({ open, onOpenChange }: Props) {
-  const [dontShow, setDontShow] = useState(true)
-
-  async function handleClose() {
-    await windowApi.markCloseHintSeen()
-    if (dontShow) await prefsApi.set("hide_to_menubar_shown", true).catch(() => {})
-    onOpenChange(false)
-  }
-
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Dimmed backdrop */}
-      <div className="absolute inset-0 bg-black/20" />
-
-      {/* Card */}
-      <div className="relative w-[380px] overflow-hidden rounded-[12px] border border-border bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-        <div className="p-[22px]">
-          {/* Icon */}
-          <div className="mb-[10px] inline-flex size-7 items-center justify-center rounded-[7px]"
-            style={{ background: "color-mix(in oklch, var(--accent-neutral) 15%, transparent)" }}>
-            {/* menubar icon SVG */}
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" className="text-foreground">
-              <rect x="1" y="2" width="14" height="3" rx="1"/><rect x="1" y="7" width="14" height="7" rx="1"/>
-            </svg>
-          </div>
-
-          <h2 className="font-display text-[15px] font-semibold text-foreground" style={{ letterSpacing: -0.2 }}>
-            Dev Radio is still listening.
-          </h2>
-          <p className="mt-[6px] text-[12.5px] leading-[1.55] text-muted-foreground">
-            Closing this window doesn't quit the app — it just tucks back into
-            the menubar. Look for the{" "}
-            <span className="inline-flex items-center rounded-[4px] border border-border bg-surface-2 px-1 py-[1px] align-middle">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" className="text-foreground">
-                <rect x="1" y="2" width="14" height="3" rx="1"/><rect x="1" y="7" width="14" height="7" rx="1"/>
-              </svg>
-            </span>{" "}
-            icon near your clock.
-          </p>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-[10px] border-t border-border-subtle bg-surface-2 px-[14px] py-[10px]">
-          <label className="flex cursor-pointer items-center gap-1.5 text-[11.5px] text-faint">
-            <Checkbox checked={dontShow} onCheckedChange={(v) => setDontShow(v === true)} />
-            Don't show this again
-          </label>
-          <div className="flex gap-[6px]">
-            <DRButton variant="ghost" size="sm" onClick={handleQuit}>
-              Quit instead
-            </DRButton>
-            <DRButton variant="primary" size="sm" onClick={() => void handleClose()}>
-              Got it
-            </DRButton>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-```
-
----
-
-## 14. StatusGlyph — Size & Glyph Corrections ✅
-
-**Files:** `src/components/dr/status-glyph.tsx`
-
-The design uses `size={12}` for popover rows (not `16`). The inner icon paths scale to the viewBox.
-
-1. Change `default size = 16` → keep 16 as default for general use, but pass `size={12}` explicitly from `DeployRow`
-2. The `building` pulse ring in the design uses an absolutely-positioned full-bleed ring:
-
-```tsx
-// Add pulse ring for building state
-{status === "building" && (
-  <span
-    className="absolute rounded-full"
-    style={{
-      inset: -3,
-      background: "var(--amber)",
-      opacity: 0.25,
-      animation: "dr-pulse 1.6s ease-out infinite",
-    }}
-  />
-)}
-```
-
-Replace the current `dr-pulse` keyframe (which does scale) with the design's outward-ring pulse:
-
-```css
-/* index.css — replace existing dr-pulse */
-@keyframes dr-pulse {
-  0%   { transform: scale(0.8); opacity: 0.5; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-```
-
----
-
-## 15. Icon additions ✅
-
-**Files:** `src/components/dr/icon.tsx`
-
-Add missing icon names referenced in the plan:
-
-```tsx
-// Add to IconName union:
-| "power"
-| "menubar"
-
-// Add to PATHS:
-power: "M8 3 V8 M5 5.5 A4 4 0 1 0 11 5.5",
-menubar: "M1 2 H15 V5 H1 Z M1 7 H15 V14 H1 Z",
-```
-
----
-
-## 16. CSS additions to `index.css` ✅
-
-```css
-/* Pulse-dot for header pill (building state) */
-@keyframes dr-pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-  50%       { box-shadow: 0 0 0 3px transparent; opacity: 0.7; }
-}
-
-/* Spin for loading state */
-@keyframes dr-spin {
-  to { transform: rotate(360deg); }
-}
-```
-
----
-
-## 17. Prefs additions ✅
-
-**Files:** `src/lib/prefs.ts` + `src-tauri/src/prefs.rs`
-
-Add two notification prefs:
-
-```ts
-// src/lib/prefs.ts
-export type Prefs = {
-  // ... existing ...
-  notify_on_failure: boolean
-  notify_on_recovery: boolean
-}
-
-export const DEFAULT_PREFS: Prefs = {
-  // ... existing ...
-  notify_on_failure: true,
-  notify_on_recovery: true,
-}
-```
+OAuth flow + profile fetch. Follows `vercel.rs` structure exactly.
 
 ```rust
-// src-tauri/src/prefs.rs — add to Prefs struct
-pub notify_on_failure: bool,
-pub notify_on_recovery: bool,
+use serde::Deserialize;
+use tauri::{AppHandle, Emitter};
 
-// In default impl:
-notify_on_failure: true,
-notify_on_recovery: true,
+use crate::adapters::{AccountProfile, Platform};
+use crate::auth::oauth::{
+    self, generate_state, redirect_uri_for, CallbackResult, OAUTH_TIMEOUT_SECS,
+};
+use crate::auth::AuthError;
+use crate::store::{self, AccountHealth, StoredAccount};
+
+const CLIENT_ID: &str = env!("GITHUB_CLIENT_ID");
+const CLIENT_SECRET: &str = env!("GITHUB_CLIENT_SECRET");
+const AUTHORIZE_URL: &str = "https://github.com/login/oauth/authorize";
+const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+const SCOPES: &str = "repo read:user";
+pub const API_BASE: &str = "https://api.github.com";
+
+#[derive(Debug, Deserialize)]
+struct TokenResponse {
+    access_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubUser {
+    #[serde(alias = "node_id")]
+    id: i64,
+    login: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    avatar_url: Option<String>,
+}
+
+pub fn is_configured() -> bool {
+    !CLIENT_ID.is_empty() && !CLIENT_SECRET.is_empty()
+}
+
+pub async fn fetch_github_profile(token: &str) -> Result<AccountProfile, AuthError> {
+    fetch_github_profile_with_base(token, API_BASE).await
+}
+
+pub async fn fetch_github_profile_with_base(
+    token: &str,
+    api_base: &str,
+) -> Result<AccountProfile, AuthError> {
+    let client = reqwest::Client::new();
+    let res = client
+        .get(format!("{api_base}/user"))
+        .bearer_auth(token)
+        .header("User-Agent", "dev-radio")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(AuthError::from)?;
+
+    let status = res.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Err(AuthError::Provider("Invalid token".into()));
+    }
+
+    let user: GitHubUser = res
+        .error_for_status()
+        .map_err(AuthError::from)?
+        .json()
+        .await
+        .map_err(AuthError::from)?;
+
+    let display = user.name.clone()
+        .unwrap_or_else(|| user.login.clone());
+
+    Ok(AccountProfile {
+        id: user.id.to_string(),
+        platform: Platform::GitHub,
+        display_name: display,
+        email: user.email,
+        avatar_url: user.avatar_url,
+        scope_id: None,
+    })
+}
+
+pub async fn start_github_oauth(app: AppHandle) -> Result<AccountProfile, AuthError> {
+    if !is_configured() {
+        return Err(AuthError::Config(
+            "GitHub OAuth not configured — set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET at build time"
+                .into(),
+        ));
+    }
+
+    let state = generate_state();
+    let binding = oauth::spawn_loopback_server(state.clone())?;
+    let redirect = redirect_uri_for(binding.port);
+
+    let authorize_url = format!(
+        "{AUTHORIZE_URL}?client_id={cid}&redirect_uri={ruri}&scope={scope}&state={state}",
+        cid = urlencoding::encode(CLIENT_ID),
+        ruri = urlencoding::encode(&redirect),
+        scope = urlencoding::encode(SCOPES),
+        state = urlencoding::encode(&state),
+    );
+
+    if let Err(e) = open_browser(&authorize_url) {
+        oauth::abort_current();
+        return Err(e);
+    }
+
+    let callback = tokio::time::timeout(
+        std::time::Duration::from_secs(OAUTH_TIMEOUT_SECS),
+        binding.code_rx,
+    )
+    .await;
+
+    let code = match callback {
+        Err(_) => { oauth::abort_current(); return Err(AuthError::Timeout); }
+        Ok(Err(_)) => { oauth::abort_current(); return Err(AuthError::ServerClosed); }
+        Ok(Ok(Err(e))) => { oauth::abort_current(); return Err(e); }
+        Ok(Ok(Ok(CallbackResult::ProviderError(msg)))) => {
+            oauth::abort_current();
+            return Err(AuthError::Provider(msg));
+        }
+        Ok(Ok(Ok(CallbackResult::Code(code)))) => code,
+    };
+
+    oauth::abort_current();
+
+    // Exchange code for token
+    let client = reqwest::Client::new();
+    let res = client
+        .post(TOKEN_URL)
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", CLIENT_ID),
+            ("client_secret", CLIENT_SECRET),
+            ("code", code.as_str()),
+            ("redirect_uri", redirect.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(AuthError::from)?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(AuthError::Provider(format!(
+            "token exchange failed ({status}): {body}"
+        )));
+    }
+
+    let token: TokenResponse = res.json().await.map_err(AuthError::from)?;
+    let profile = fetch_github_profile(&token.access_token).await?;
+
+    let account_id = uuid::Uuid::new_v4().to_string();
+    crate::keychain::store_token(Platform::GitHub.key(), &account_id, &token.access_token)?;
+    let stored = StoredAccount {
+        id: account_id.clone(),
+        platform: Platform::GitHub,
+        display_name: profile.display_name.clone(),
+        scope_id: None,
+        enabled: true,
+        created_at: chrono::Utc::now().timestamp_millis(),
+        health: AccountHealth::Ok,
+        monitored_repos: None,
+    };
+    store::save_account(&app, &stored).map_err(AuthError::Store)?;
+
+    let emitted = AccountProfile {
+        id: account_id,
+        ..profile
+    };
+    let _ = app.emit("oauth:complete", &emitted);
+
+    Ok(emitted)
+}
+
+fn open_browser(url: &str) -> Result<(), AuthError> {
+    tauri_plugin_opener::open_url(url, None::<&str>)
+        .map_err(|e| AuthError::Server(format!("failed to open browser: {e}")))
+}
+```
+
+**Tests** (wiremock, same pattern as `vercel.rs` tests):
+- `fetches_github_profile` — mock `GET /user`, verify fields
+- `unauthorized_surfaces_error` — mock 401, verify `AuthError::Provider`
+- `non_json_body_surfaces_network_error`
+
+---
+
+#### `src-tauri/src/adapters/github/mod.rs`
+
+Adapter struct + `DeploymentMonitor` impl. Follows `vercel/mod.rs` structure.
+
+```rust
+pub mod mapper;
+pub mod types;
+
+use async_trait::async_trait;
+
+use crate::adapters::r#trait::{AdapterError, DeploymentMonitor};
+use crate::adapters::{Deployment, Platform, Project};
+
+use self::types::WorkflowRunsResponse;
+
+pub const DEFAULT_API_BASE: &str = "https://api.github.com";
+
+#[derive(Debug)]
+pub struct GitHubAdapter {
+    account_id: String,
+    token: String,
+    monitored_repos: Vec<String>,   // e.g. ["owner/repo1", "owner/repo2"]
+    http: reqwest::Client,
+    base: String,
+}
+
+impl GitHubAdapter {
+    pub fn new(
+        account_id: String,
+        token: String,
+        monitored_repos: Option<Vec<String>>,
+    ) -> Self {
+        Self::with_base(account_id, token, monitored_repos, DEFAULT_API_BASE.to_string())
+    }
+
+    pub fn with_base(
+        account_id: String,
+        token: String,
+        monitored_repos: Option<Vec<String>>,
+        base: String,
+    ) -> Self {
+        Self {
+            account_id,
+            token,
+            monitored_repos: monitored_repos.unwrap_or_default(),
+            http: reqwest::Client::new(),
+            base,
+        }
+    }
+
+    async fn get<T: for<'de> serde::Deserialize<'de>>(
+        &self,
+        path: &str,
+    ) -> Result<T, AdapterError> {
+        let url = format!("{}{}", self.base, path);
+        let res = self.http
+            .get(&url)
+            .bearer_auth(&self.token)
+            .header("User-Agent", "dev-radio")
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(AdapterError::from)?;
+
+        let status = res.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Err(AdapterError::Unauthorized);
+        }
+        if status == reqwest::StatusCode::FORBIDDEN {
+            // GitHub returns 403 for rate limits
+            let remaining = res.headers()
+                .get("x-ratelimit-remaining")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok());
+            if remaining == Some(0) {
+                let reset = res.headers()
+                    .get("x-ratelimit-reset")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<i64>().ok())
+                    .map(|epoch| {
+                        let now = chrono::Utc::now().timestamp();
+                        (epoch - now).max(1) as u64
+                    })
+                    .unwrap_or(60);
+                return Err(AdapterError::RateLimited(reset));
+            }
+            return Err(AdapterError::Unauthorized);
+        }
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(AdapterError::RateLimited(60));
+        }
+
+        res.error_for_status()
+            .map_err(|e| AdapterError::Platform(e.to_string()))?
+            .json()
+            .await
+            .map_err(AdapterError::from)
+    }
+}
+
+#[async_trait]
+impl DeploymentMonitor for GitHubAdapter {
+    fn platform(&self) -> Platform {
+        Platform::GitHub
+    }
+
+    fn account_id(&self) -> &str {
+        &self.account_id
+    }
+
+    async fn list_projects(&self) -> Result<Vec<Project>, AdapterError> {
+        // Return one Project per monitored repo
+        Ok(self.monitored_repos.iter().map(|full_name| {
+            let name = full_name.split('/').last().unwrap_or(full_name);
+            Project {
+                id: full_name.clone(),
+                account_id: self.account_id.clone(),
+                platform: Platform::GitHub,
+                name: name.to_string(),
+                url: Some(format!("https://github.com/{full_name}")),
+                framework: None,
+                latest_deployment: None,
+            }
+        }).collect())
+    }
+
+    async fn list_recent_deployments(
+        &self,
+        project_ids: Option<&[String]>,
+        limit: usize,
+    ) -> Result<Vec<Deployment>, AdapterError> {
+        let repos: Vec<&String> = match project_ids {
+            Some(ids) if !ids.is_empty() => {
+                ids.iter().filter(|id| self.monitored_repos.contains(id)).collect()
+            }
+            _ => self.monitored_repos.iter().collect(),
+        };
+
+        let per_repo = (limit / repos.len().max(1)).max(5).min(10);
+        let mut all_deployments = Vec::new();
+
+        for repo in &repos {
+            let path = format!("/repos/{}/actions/runs?per_page={per_repo}", repo);
+            match self.get::<WorkflowRunsResponse>(&path).await {
+                Ok(response) => {
+                    for run in response.workflow_runs {
+                        all_deployments.push(mapper::deployment_from_run(run, repo));
+                    }
+                }
+                Err(AdapterError::Unauthorized) => return Err(AdapterError::Unauthorized),
+                Err(AdapterError::RateLimited(s)) => return Err(AdapterError::RateLimited(s)),
+                Err(e) => {
+                    log::warn!("github: failed to fetch runs for {repo}: {e}");
+                    continue;
+                }
+            }
+        }
+
+        all_deployments.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        all_deployments.truncate(limit);
+        Ok(all_deployments)
+    }
+}
+```
+
+**Tests** (wiremock):
+- `list_projects_returns_monitored_repos`
+- `list_recent_deployments_fetches_runs_per_repo`
+- `rate_limit_403_surfaces_correctly`
+- `unauthorized_surfaces`
+
+---
+
+#### `src-tauri/src/adapters/github/types.rs`
+
+GitHub Actions API response DTOs.
+
+```rust
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct WorkflowRunsResponse {
+    #[serde(default)]
+    pub total_count: u64,
+    #[serde(default)]
+    pub workflow_runs: Vec<WorkflowRunDto>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WorkflowRunDto {
+    pub id: i64,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub conclusion: Option<String>,
+    #[serde(default)]
+    pub html_url: Option<String>,
+    #[serde(default)]
+    pub head_branch: Option<String>,
+    #[serde(default)]
+    pub head_sha: Option<String>,
+    #[serde(default)]
+    pub head_commit: Option<HeadCommitDto>,
+    #[serde(default)]
+    pub actor: Option<ActorDto>,
+    #[serde(default)]
+    pub workflow_id: Option<i64>,
+    #[serde(default)]
+    pub event: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub run_started_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HeadCommitDto {
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ActorDto {
+    #[serde(default)]
+    pub login: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RepoDto {
+    pub id: i64,
+    pub full_name: String,
+    pub name: String,
+    #[serde(default)]
+    pub html_url: Option<String>,
+    #[serde(rename = "private")]
+    #[serde(default)]
+    pub is_private: bool,
+    #[serde(default)]
+    pub default_branch: Option<String>,
+}
 ```
 
 ---
 
-## Implementation Order
+#### `src-tauri/src/adapters/github/mapper.rs`
 
-| Priority | Item | Status |
+DTO → domain model mapping. Follows `railway/mapper.rs` pattern.
+
+```rust
+use chrono::DateTime;
+
+use crate::adapters::github::types::WorkflowRunDto;
+use crate::adapters::{Deployment, DeploymentState};
+
+pub fn map_run_state(status: Option<&str>, conclusion: Option<&str>) -> DeploymentState {
+    match (status.unwrap_or(""), conclusion.unwrap_or("")) {
+        ("queued", _) | ("waiting", _) => DeploymentState::Queued,
+        ("in_progress", _) => DeploymentState::Building,
+        ("completed", "success") => DeploymentState::Ready,
+        ("completed", "failure") | ("completed", "timed_out") => DeploymentState::Error,
+        ("completed", "cancelled") | ("completed", "skipped") | ("completed", "stale") => {
+            DeploymentState::Canceled
+        }
+        ("completed", "action_required") => DeploymentState::Queued,
+        ("completed", _) => DeploymentState::Unknown,
+        _ => DeploymentState::Unknown,
+    }
+}
+
+fn parse_ts(s: Option<&str>) -> i64 {
+    s.and_then(|v| DateTime::parse_from_rfc3339(v).ok())
+        .map(|d| d.timestamp_millis())
+        .unwrap_or(0)
+}
+
+pub fn deployment_from_run(run: WorkflowRunDto, project_id: &str) -> Deployment {
+    let state = map_run_state(run.status.as_deref(), run.conclusion.as_deref());
+    let created_at = parse_ts(run.created_at.as_deref());
+    let updated_at = parse_ts(run.updated_at.as_deref());
+    let run_started = parse_ts(run.run_started_at.as_deref());
+
+    let finished_at = if matches!(state, DeploymentState::Ready | DeploymentState::Error | DeploymentState::Canceled) {
+        Some(updated_at)
+    } else {
+        None
+    };
+
+    let duration_ms = finished_at.and_then(|f| {
+        let start = if run_started > 0 { run_started } else { created_at };
+        if f >= start { Some((f - start) as u64) } else { None }
+    });
+
+    Deployment {
+        id: run.id.to_string(),
+        project_id: project_id.to_string(),
+        service_id: run.workflow_id.map(|id| id.to_string()),
+        service_name: run.name,
+        state,
+        environment: run.event.unwrap_or_else(|| "push".to_string()),
+        url: run.html_url.clone(),
+        inspector_url: run.html_url,
+        branch: run.head_branch,
+        commit_sha: run.head_sha,
+        commit_message: run.head_commit.and_then(|c| c.message),
+        author_name: run.actor.as_ref().and_then(|a| a.login.clone()),
+        author_avatar: run.actor.and_then(|a| a.avatar_url),
+        created_at,
+        finished_at,
+        duration_ms,
+        progress: None,
+    }
+}
+```
+
+**Tests**:
+- `map_run_state` covers all status/conclusion combos
+- `deployment_from_run` maps fields correctly
+- `duration_uses_run_started_at` verifies correct start time selection
+
+---
+
+### 4.2 Modified Rust files
+
+#### `src-tauri/src/adapters/mod.rs` — Add `GitHub` variant
+
+```rust
+// Add to the enum (line 14):
+pub mod github;  // add after `pub mod railway;`
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Vercel,
+    Railway,
+    GitHub,  // new
+}
+
+impl Platform {
+    pub fn key(&self) -> &'static str {
+        match self {
+            Platform::Vercel => "vercel",
+            Platform::Railway => "railway",
+            Platform::GitHub => "github",  // new
+        }
+    }
+
+    pub fn from_key(s: &str) -> Option<Self> {
+        match s {
+            "vercel" => Some(Platform::Vercel),
+            "railway" => Some(Platform::Railway),
+            "github" => Some(Platform::GitHub),  // new
+            _ => None,
+        }
+    }
+}
+```
+
+---
+
+#### `src-tauri/src/adapters/registry.rs` — Add GitHub arm (line 37-49)
+
+```rust
+// In hydrate(), add to the match after Railway:
+Platform::GitHub => Arc::new(crate::adapters::github::GitHubAdapter::new(
+    account.id.clone(),
+    token,
+    account.monitored_repos.clone(),
+)),
+```
+
+---
+
+#### `src-tauri/src/store.rs` — Add `monitored_repos` field + fix `delete_account`
+
+```rust
+// StoredAccount (line 24-34):
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredAccount {
+    pub id: String,
+    pub platform: Platform,
+    pub display_name: String,
+    pub scope_id: Option<String>,
+    pub enabled: bool,
+    pub created_at: i64,
+    #[serde(default)]
+    pub health: AccountHealth,
+    #[serde(default)]
+    pub monitored_repos: Option<Vec<String>>,  // new — None for Vercel/Railway
+}
+
+// delete_account (line 79) — replace hard-coded array:
+// Before:
+let platforms = [Platform::Vercel, Platform::Railway];
+for p in platforms {
+    let _ = crate::keychain::delete_token(p.key(), id);
+}
+// After:
+let _ = crate::keychain::delete_token("_unused", id);
+// (delete_token already ignores the platform param — it removes by account_id from vault)
+```
+
+---
+
+#### `src-tauri/src/auth/mod.rs` — Add `pub mod github;`
+
+```rust
+pub mod oauth;
+pub mod pat;
+pub mod railway;
+pub mod token_provider;
+pub mod vercel;
+pub mod github;  // new
+```
+
+---
+
+#### `src-tauri/src/auth/pat.rs` — Add GitHub arm (line 16-19)
+
+```rust
+pub async fn connect_via_pat(
+    app: &AppHandle,
+    platform: Platform,
+    token: String,
+    scope_id: Option<String>,
+) -> Result<AccountProfile, AuthError> {
+    let profile = match platform {
+        Platform::Vercel => fetch_vercel_profile(&token, scope_id.as_deref()).await?,
+        Platform::Railway => fetch_railway_profile(&token).await?,
+        Platform::GitHub => crate::auth::github::fetch_github_profile(&token).await?,  // new
+    };
+    // ... rest unchanged
+}
+```
+
+Also update `StoredAccount` construction at line 22-30 to include `monitored_repos: None`.
+
+---
+
+#### `src-tauri/src/auth/token_provider.rs` — Add GitHub pass-through (line 23-38)
+
+```rust
+// In the match on platform, add after Railway:
+Platform::GitHub => Ok(access_token),  // GitHub tokens don't expire
+```
+
+---
+
+#### `src-tauri/src/commands/accounts.rs` — Wire up GitHub
+
+**`start_oauth` (line 57-65)**:
+```rust
+"github" => crate::auth::github::start_github_oauth(app.clone())
+    .await
+    .map_err(|e| e.to_string())?,
+```
+
+**`validate_token` (line 170-173)**:
+```rust
+Platform::GitHub => crate::auth::github::fetch_github_profile(&token).await,
+```
+
+**New commands — add to this file**:
+
+```rust
+#[derive(Debug, Serialize)]
+pub struct GitHubRepoInfo {
+    pub full_name: String,
+    pub name: String,
+    pub is_private: bool,
+    pub default_branch: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_github_repos(
+    app: AppHandle,
+    account_id: String,
+) -> Result<Vec<GitHubRepoInfo>, String> {
+    let accounts = store::list_accounts(&app)?;
+    let account = accounts.into_iter()
+        .find(|a| a.id == account_id && a.platform == Platform::GitHub)
+        .ok_or_else(|| format!("no GitHub account: {account_id}"))?;
+
+    let token = token_provider::get_fresh_access_token(&account_id, Platform::GitHub)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let client = reqwest::Client::new();
+    let res = client
+        .get("https://api.github.com/user/repos?sort=pushed&per_page=100&type=all")
+        .bearer_auth(&token)
+        .header("User-Agent", "dev-radio")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("GitHub API error: {}", res.status()));
+    }
+
+    let repos: Vec<crate::adapters::github::types::RepoDto> =
+        res.json().await.map_err(|e| e.to_string())?;
+
+    Ok(repos.into_iter().map(|r| GitHubRepoInfo {
+        full_name: r.full_name,
+        name: r.name,
+        is_private: r.is_private,
+        default_branch: r.default_branch,
+    }).collect())
+}
+
+#[tauri::command]
+pub async fn set_monitored_repos(
+    app: AppHandle,
+    account_id: String,
+    repos: Vec<String>,
+) -> Result<(), String> {
+    let capped = repos.into_iter().take(30).collect::<Vec<_>>();
+    store::update_account(&app, &account_id, |a| {
+        a.monitored_repos = Some(capped);
+    })?;
+    rehydrate_after_change(&app).await;
+    Ok(())
+}
+```
+
+---
+
+#### `src-tauri/src/lib.rs` — Register new commands (line 97-125)
+
+Add to `invoke_handler`:
+```rust
+account_cmds::list_github_repos,
+account_cmds::set_monitored_repos,
+```
+
+---
+
+#### `src-tauri/build.rs` — Add GitHub env vars (after line 25)
+
+```rust
+let github_client_id = std::env::var("GITHUB_CLIENT_ID").unwrap_or_default();
+let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_default();
+
+// After line 36 (release warnings):
+if profile == "release" && (github_client_id.is_empty() || github_client_secret.is_empty()) {
+    println!(
+        "cargo:warning=GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET not set — GitHub OAuth will be disabled in this build. Users can still connect by pasting a token."
+    );
+}
+
+// After line 43:
+println!("cargo:rustc-env=GITHUB_CLIENT_ID={}", github_client_id);
+println!("cargo:rustc-env=GITHUB_CLIENT_SECRET={}", github_client_secret);
+println!("cargo:rerun-if-env-changed=GITHUB_CLIENT_ID");
+println!("cargo:rerun-if-env-changed=GITHUB_CLIENT_SECRET");
+```
+
+---
+
+#### `src-tauri/tauri.conf.json` — Update CSP (line 48)
+
+Add to `connect-src`:
+```
+https://api.github.com https://github.com
+```
+
+`img-src` already has `https://avatars.githubusercontent.com`. ✅
+
+---
+
+#### `src-tauri/capabilities/default.json` — Add GitHub URL (line 17-21)
+
+```json
+{ "url": "https://github.com/*" }
+```
+
+---
+
+### 4.3 New frontend files
+
+#### `src/assets/providers/github.svg`
+
+GitHub Invertocat mark SVG (single path, monochrome — same pattern as vercel.svg and railway.svg). Source from GitHub's brand guidelines.
+
+---
+
+#### `src/components/account/repo-selector.tsx`
+
+```tsx
+import { useEffect, useState } from "react"
+import { DRButton } from "@/components/dr/button"
+import { DRInput } from "@/components/dr/input"
+import { Icon } from "@/components/dr/icon"
+import { trackedInvoke } from "@/lib/tauri"
+
+type GitHubRepo = {
+  full_name: string
+  name: string
+  is_private: boolean
+  default_branch: string | null
+}
+
+type Props = {
+  accountId: string
+  initialRepos?: string[]
+  onSave: (repos: string[]) => void | Promise<void>
+}
+
+export function RepoSelector({ accountId, initialRepos = [], onSave }: Props) {
+  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialRepos))
+  const [search, setSearch] = useState("")
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    trackedInvoke<GitHubRepo[]>("list_github_repos", { accountId })
+      .then((r) => {
+        setRepos(r)
+        if (initialRepos.length === 0) {
+          // Auto-select first 10 repos on initial connect
+          setSelected(new Set(r.slice(0, 10).map((repo) => repo.full_name)))
+        }
+      })
+      .finally(() => setLoading(false))
+  }, [accountId])
+
+  function toggle(fullName: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(fullName)) next.delete(fullName)
+      else if (next.size < 30) next.add(fullName)
+      return next
+    })
+  }
+
+  const filtered = repos.filter((r) =>
+    r.full_name.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  async function handleSave() {
+    await trackedInvoke("set_monitored_repos", {
+      accountId,
+      repos: Array.from(selected),
+    })
+    await onSave(Array.from(selected))
+  }
+
+  // Renders: search input, scrollable checkbox list, save button
+  // Max 30 repos selected — show count "N/30 repos selected"
+  // ...
+}
+```
+
+---
+
+### 4.4 Modified frontend files
+
+#### `src/lib/accounts.ts`
+
+```ts
+// Line 1:
+export type Platform = "vercel" | "railway" | "github"
+
+// Line 106-109:
+export const PLATFORM_LABEL: Record<Platform, string> = {
+  vercel: "Vercel",
+  railway: "Railway",
+  github: "GitHub",  // new
+}
+
+// Add to accountsApi object:
+listGithubRepos(accountId: string) {
+  return trackedInvoke<GitHubRepoInfo[]>("list_github_repos", { accountId })
+},
+setMonitoredRepos(accountId: string, repos: string[]) {
+  return trackedInvoke<void>("set_monitored_repos", { accountId, repos })
+},
+```
+
+---
+
+#### `src/components/dr/provider-mark.tsx`
+
+```tsx
+// Line 1-2:
+import vercelSvg from "@/assets/providers/vercel.svg?raw"
+import railwaySvg from "@/assets/providers/railway.svg?raw"
+import githubSvg from "@/assets/providers/github.svg?raw"  // new
+
+const RAW: Record<Platform, string> = {
+  vercel: vercelSvg,
+  railway: railwaySvg,
+  github: githubSvg,  // new
+}
+
+const PROCESSED: Record<Platform, string> = {
+  vercel: currentColorize(RAW.vercel),
+  railway: currentColorize(RAW.railway),
+  github: currentColorize(RAW.github),  // new
+}
+```
+
+---
+
+#### `src/components/dr/provider-chip.tsx`
+
+```tsx
+// Line 19-22:
+const ACCENT_VAR: Record<Platform, string> = {
+  vercel: "var(--accent-vercel)",
+  railway: "var(--accent-railway)",
+  github: "var(--accent-github)",  // new
+}
+```
+
+---
+
+#### `src/components/account/add-account-form.tsx`
+
+```tsx
+// Line 27-42 — add github to TOKEN_LINKS:
+github: {
+  href: "https://github.com/settings/tokens",
+  label: "github.com/settings/tokens",
+  scopeLabel: null,
+  placeholder: "ghp_… or github_pat_…",
+  hint: 'Classic: select "repo" and "read:user" scopes.',
+},
+
+// Line 44-47:
+github: "Connect with GitHub",
+
+// Line 196 — token label for GitHub:
+: platform === "github"
+  ? "GitHub Personal Access Token"
+  : "Railway API token"
+```
+
+---
+
+#### `src/components/account/add-account-dialog.tsx`
+
+```tsx
+// Line 24:
+const PLATFORMS: Platform[] = ["vercel", "railway", "github"]
+
+// Line 55 — update description:
+Link a Vercel, Railway, or GitHub account to monitor deployments.
+```
+
+---
+
+#### `src/app/desktop/views/onboarding-view.tsx`
+
+```tsx
+// Line 138 — add github to the grid:
+{(["vercel", "railway", "github"] as const).map((p) => { ... })}
+
+// Line 137 — change to 3-column grid for 3 platforms:
+<div className="grid w-full max-w-[440px] grid-cols-3 gap-3">
+
+// Line 188-189 — add GitHub connect text:
+: platform === "github"
+  ? "Approve Dev Radio in your browser or paste a personal access token."
+  : "Paste a Railway API token. It's stored only in your system keychain."
+```
+
+---
+
+#### `src/app/desktop/views/settings/accounts-tab.tsx`
+
+Add "Manage repos" menu item for GitHub accounts (inside the `DRMenu` at line 107-128):
+
+```tsx
+{acc.platform === "github" ? (
+  <DRMenuItem onSelect={() => void handleManageRepos(acc.id)}>
+    Manage repositories…
+  </DRMenuItem>
+) : null}
+```
+
+Add state and handler for the repo selector dialog. Show repo count in subtitle:
+
+```tsx
+// In the account subtitle (line 96-104):
+{acc.platform === "github" && acc.monitored_repos_count ? (
+  <>
+    <span aria-hidden>·</span>
+    <span>{acc.monitored_repos_count} repos</span>
+  </>
+) : null}
+```
+
+---
+
+#### `src/index.css` — Add GitHub accent variables
+
+```css
+/* In :root (after line 45): */
+--accent-github-l: oklch(0.30 0.005 260);
+--accent-github-d: oklch(0.92 0.005 260);
+
+/* In [data-theme="light"] (after line 61): */
+--accent-github: var(--accent-github-l);
+
+/* In [data-theme="dark"] (after line 78): */
+--accent-github: var(--accent-github-d);
+```
+
+---
+
+#### `.env.example`
+
+```env
+# GitHub OAuth App credentials
+# Register at: https://github.com/settings/developers
+# Redirect URI must be: http://127.0.0.1:53123/callback
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+```
+
+---
+
+## 5. Data flow — end to end
+
+```
+                          ┌──────────────┐
+                          │  User clicks  │
+                          │ "Connect with │
+                          │   GitHub"     │
+                          └──────┬───────┘
+                                 │
+             ┌───────────────────▼──────────────────┐
+             │   start_github_oauth()                │
+             │   1. spawn_loopback_server(state)     │
+             │   2. open browser → github.com/oauth  │
+             │   3. wait for callback code           │
+             │   4. POST /login/oauth/access_token   │
+             │   5. GET /user → profile              │
+             │   6. store_token() in keychain (Pat)  │
+             │   7. save_account() in store           │
+             │   8. emit("oauth:complete")           │
+             └───────────────────┬──────────────────┘
+                                 │
+             ┌───────────────────▼──────────────────┐
+             │   Repo selector appears               │
+             │   1. list_github_repos(account_id)    │
+             │      → GET /user/repos?sort=pushed    │
+             │   2. User picks repos (max 30)        │
+             │   3. set_monitored_repos(id, repos)   │
+             │      → updates StoredAccount          │
+             │   4. rehydrate_after_change()         │
+             └───────────────────┬──────────────────┘
+                                 │
+             ┌───────────────────▼──────────────────┐
+             │   Poller (every 30s)                  │
+             │   1. registry.hydrate() creates       │
+             │      GitHubAdapter with token +       │
+             │      monitored_repos                  │
+             │   2. list_projects() → monitored repos│
+             │   3. list_recent_deployments()        │
+             │      → GET /repos/{owner}/{repo}/     │
+             │        actions/runs?per_page=10       │
+             │      for each monitored repo          │
+             │   4. Map runs → Deployment structs    │
+             │   5. cache.replace_and_diff()         │
+             │   6. emit("dashboard:update")         │
+             │   7. fire_for_diff() notifications    │
+             │   8. set_health() tray icon           │
+             └──────────────────────────────────────┘
+```
+
+---
+
+## 6. GitHub status → tray icon mapping
+
+Existing `health_from_state()` in `poller.rs:398-431` works unchanged:
+
+| Workflow Run State | `DeploymentState` | Tray contribution |
 |---|---|---|
-| 1 | Deploy row — 2-line layout + env pill + domain/service | ✅ Done |
-| 2 | Account group headers | ✅ Done |
-| 3 | Header health pill + filter bar split | ✅ Done |
-| 4 | Footer — dot + interval + remove extra shortcuts | ✅ Done |
-| 5 | Offline — banner + stale list | ✅ Done |
-| 6 | Loading, empty, no-accounts copy + structure | ✅ Done |
-| 7 | Rate limit — banner pattern | ✅ Done |
-| 8 | Onboarding welcome — provider list + coming soon + footer | ✅ Done |
-| 9 | Onboarding connect — hero strip + railway instructions | ✅ Done |
-| 10 | Onboarding success — project list preview + kbd in button | ✅ Done |
-| 11 | Settings accounts — DRBadge + last sync + add-another | ✅ Done |
-| 12 | Settings general — card rows + notification toggles + Quit | ✅ Done |
-| 13 | Settings about — radio icon + update row + footer | ✅ Done |
-| 14 | Close hint dialog — overlay + "Quit instead" + inline icon | ✅ Done |
-| 15 | StatusGlyph — building pulse ring | ✅ Done |
-| 16 | Icon additions (power, menubar) | ✅ Done |
-| 17 | CSS keyframes (dr-pulse-dot, dr-spin) | ✅ Done |
+| in_progress / queued | Building / Queued | → Yellow |
+| completed + success | Ready | → Green |
+| completed + failure (< 30min) | Error | → Red |
+| completed + cancelled | Canceled | → (ignored, no color contribution) |
+
+Priority: Red > Yellow > Green > Gray. Same as today.
+
+---
+
+## 7. Todo list
+
+### Phase 1: Backend — Platform enum + auth (`~1 day`)
+
+- [x] **1.1** Add `GitHub` variant to `Platform` enum in `src-tauri/src/adapters/mod.rs`
+- [x] **1.2** Update `key()` and `from_key()` for `"github"`
+- [x] **1.3** Add `pub mod github;` to `src-tauri/src/adapters/mod.rs`
+- [x] **1.4** Add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to `build.rs`
+- [x] **1.5** Add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to `.env.example`
+- [x] **1.6** Create `src-tauri/src/auth/github.rs` with `fetch_github_profile()` and `start_github_oauth()`
+- [x] **1.7** Add `pub mod github;` to `src-tauri/src/auth/mod.rs`
+- [x] **1.8** Add `Platform::GitHub` arm to `connect_via_pat()` in `src-tauri/src/auth/pat.rs`
+- [x] **1.9** Add `Platform::GitHub => Ok(access_token)` to `token_provider.rs`
+- [x] **1.10** Add `monitored_repos: Option<Vec<String>>` to `StoredAccount` in `store.rs`
+- [x] **1.11** Fix `delete_account()` in `store.rs` — don't hard-code platform list for keychain cleanup
+- [x] **1.12** Wire `"github"` arm in `start_oauth` command in `commands/accounts.rs`
+- [x] **1.13** Wire `Platform::GitHub` arm in `validate_token` command
+- [x] **1.14** Update `StoredAccount` construction in `pat.rs:connect_via_pat` to include `monitored_repos: None`
+- [x] **1.15** Write wiremock tests for `fetch_github_profile` (success, 401, non-json body)
+- [x] **1.16** Run `cargo test --lib` — verify all existing tests still pass
+
+### Phase 2: Backend — Adapter + commands (`~1-2 days`)
+
+- [x] **2.1** Create `src-tauri/src/adapters/github/types.rs` with DTOs
+- [x] **2.2** Create `src-tauri/src/adapters/github/mapper.rs` with `map_run_state()` and `deployment_from_run()`
+- [x] **2.3** Create `src-tauri/src/adapters/github/mod.rs` with `GitHubAdapter` + `DeploymentMonitor` impl
+- [x] **2.4** Add `Platform::GitHub` arm to `AdapterRegistry::hydrate()` in `registry.rs`
+- [x] **2.5** Add `list_github_repos` command to `commands/accounts.rs`
+- [x] **2.6** Add `set_monitored_repos` command to `commands/accounts.rs`
+- [x] **2.7** Register `list_github_repos` and `set_monitored_repos` in `lib.rs` invoke_handler
+- [x] **2.8** Update CSP `connect-src` in `tauri.conf.json` — add `https://api.github.com https://github.com`
+- [x] **2.9** Update `capabilities/default.json` — add `{ "url": "https://github.com/*" }` to opener allowlist
+- [x] **2.10** Write wiremock tests for `GitHubAdapter` (list_projects, list_recent_deployments, rate limit 403, unauthorized)
+- [x] **2.11** Write unit tests for `mapper::map_run_state` covering all status/conclusion combos
+- [x] **2.12** Run `cargo test --lib` — verify all tests pass
+
+### Phase 3: Frontend — Platform support (`~1 day`)
+
+- [x] **3.1** Add `github.svg` to `src/assets/providers/`
+- [x] **3.2** Update `Platform` type in `src/lib/accounts.ts` — add `"github"`
+- [x] **3.3** Add `github: "GitHub"` to `PLATFORM_LABEL` in `src/lib/accounts.ts`
+- [x] **3.4** Add `listGithubRepos` and `setMonitoredRepos` to `accountsApi` in `src/lib/accounts.ts`
+- [x] **3.5** Update `provider-mark.tsx` — import github.svg, add to RAW and PROCESSED
+- [x] **3.6** Update `provider-chip.tsx` — add `github` to `ACCENT_VAR`
+- [x] **3.7** Add `--accent-github-l` and `--accent-github-d` CSS variables to `src/index.css`
+- [x] **3.8** Map `--accent-github` in both light and dark theme blocks
+- [x] **3.9** Add `github` entry to `TOKEN_LINKS` in `add-account-form.tsx`
+- [x] **3.10** Add `github` to `OAUTH_BUTTON_LABEL` in `add-account-form.tsx`
+- [x] **3.11** Update token label conditional for GitHub platform
+- [x] **3.12** Add `"github"` to `PLATFORMS` array in `add-account-dialog.tsx`
+- [x] **3.13** Update dialog description to include GitHub
+- [x] **3.14** Run `pnpm typecheck` — verify no type errors
+
+### Phase 4: Frontend — Onboarding + repo selector (`~1 day`)
+
+- [x] **4.1** Add `"github"` to the platform grid in `onboarding-view.tsx`
+- [x] **4.2** Change grid from 2-col to 3-col layout
+- [x] **4.3** Add GitHub-specific connect step description text
+- [x] **4.4** Create `src/components/account/repo-selector.tsx`
+- [x] **4.5** Wire repo selector into post-OAuth-connect flow (show after GitHub account creation)
+- [x] **4.6** Add "Manage repos" menu item for GitHub accounts in `accounts-tab.tsx`
+- [x] **4.7** Add repo count display in account subtitle for GitHub accounts
+- [x] **4.8** Add GitHub-specific error messages to `friendlyAuthError()` in `accounts.ts`
+- [x] **4.9** Run `pnpm typecheck` — verify clean
+
+### Phase 5: Integration + polish (`~0.5 day`)
+
+- [x] **5.1** End-to-end test: connect GitHub via PAT, verify repos appear in popover feed
+- [x] **5.2** End-to-end test: connect GitHub via OAuth (requires registered OAuth App)
+- [x] **5.3** Verify tray icon color changes with GitHub workflow run states
+- [x] **5.4** Verify desktop notifications fire for GitHub workflow run state changes
+- [x] **5.5** Verify project filter in popover works with GitHub repos
+- [x] **5.6** Verify account scope switching works (Cmd+0-9) with GitHub accounts
+- [x] **5.7** Verify DeployRow renders correctly — workflow name in `service_name`, event type in environment
+- [x] **5.8** Test rate limit handling — verify adapter enters cooldown correctly on 403
+- [x] **5.9** Verify redact.rs patterns cover GitHub token formats (ghp_, github_pat_)
+- [x] **5.10** Update `docs/connecting-accounts.md` with GitHub section
+- [x] **5.11** Run full test suite: `pnpm typecheck && cargo test --lib`
+
+---
+
+## 8. Risk summary
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| GitHub rate limits (5k/hr) | Medium | 30-repo cap, 30s poll interval, read `x-ratelimit-*` headers |
+| GitHub 403 ≠ 429 for rate limits | Low | Check `x-ratelimit-remaining: 0` header on 403 in adapter `get()` |
+| User-Agent header required | Low | Set on every request in adapter and auth module |
+| OAuth App registration required | Low | Document in `.env.example` and README |
+| Many repos = noisy feed | Low | `per_page=10` per repo, `monitored_repos` cap at 30, existing project filter handles rest |
+| `monitored_repos` field breaks old store data | Low | `#[serde(default)]` → backward compatible, old data gets `None` |
+| Fine-grained PATs limited repo access | Low | Use `GET /user/repos` (respects token scope), show what's visible |
+
+---
+
+## 9. What stays unchanged
+
+- `DeploymentMonitor` trait — no changes
+- `poller.rs` — works as-is with the new adapter (poll loop, cooldowns, health computation)
+- `cache.rs` — diff detection works unchanged
+- `notifications.rs` — `fire_for_diff` handles GitHub run state changes identically
+- `tray.rs` — health level icon logic unchanged
+- `keychain.rs` — vault storage works unchanged (`StoredSecret::Pat`)
+- `popover-app.tsx` — scope filtering, project filter, keyboard nav all work
+- `deploy-row.tsx` — renders `service_name` (workflow name), `commit_sha`, `branch` — all populated by mapper
+- `debug-panel.tsx` — all `trackedInvoke` calls automatically logged

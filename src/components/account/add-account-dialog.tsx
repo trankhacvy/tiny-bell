@@ -19,7 +19,7 @@ type Props = {
   initialPlatform?: Platform
 }
 
-const PLATFORMS: Platform[] = ["vercel", "railway"]
+const PLATFORMS: Platform[] = ["vercel", "railway", "github"]
 
 export function AddAccountDialog({
   open,
@@ -51,7 +51,7 @@ export function AddAccountDialog({
         <DialogHeader>
           <DialogTitle>Connect an account</DialogTitle>
           <DialogDescription>
-            Link a Vercel or Railway account to monitor deployments.
+            Link a Vercel, Railway, or GitHub account to monitor deployments.
           </DialogDescription>
         </DialogHeader>
 

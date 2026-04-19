@@ -18,8 +18,8 @@ export function PopoverNoAccounts() {
         Nothing to listen to.
       </p>
       <p className="mb-[16px] max-w-[260px] text-[12px] leading-[1.5] text-muted-foreground">
-        Connect a Vercel or Railway account and Dev Radio will start tracking
-        your deploys.
+        Connect a Vercel, Railway, or GitHub account and Tiny Bell will start
+        tracking your deploys.
       </p>
       <DRButton
         variant="primary"
@@ -27,7 +27,7 @@ export function PopoverNoAccounts() {
         leading={<Icon name="external" size={12} />}
         onClick={() => void windowApi.openDesktop("onboarding")}
       >
-        Open Dev Radio
+        Open Tiny Bell
       </DRButton>
     </div>
   )

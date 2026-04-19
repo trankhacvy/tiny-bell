@@ -4,7 +4,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::adapters::Platform;
 
-const STORE_FILE: &str = "dev-radio.store.json";
+const STORE_FILE: &str = "tiny-bell.store.json";
 const ACCOUNTS_KEY: &str = "accounts";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,6 +31,8 @@ pub struct StoredAccount {
     pub created_at: i64,
     #[serde(default)]
     pub health: AccountHealth,
+    #[serde(default)]
+    pub monitored_repos: Option<Vec<String>>,
 }
 
 fn load<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<StoredAccount>, String> {
@@ -76,9 +78,8 @@ pub fn delete_account<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<(), St
         return Ok(());
     }
     write(app, &accounts)?;
-    let platforms = [Platform::Vercel, Platform::Railway];
-    for p in platforms {
-        let _ = crate::keychain::delete_token(p.key(), id);
+    for key in ["vercel", "railway", "github"] {
+        let _ = crate::keychain::delete_token(key, id);
     }
     Ok(())
 }

@@ -1,10 +1,12 @@
 import vercelSvg from "@/assets/providers/vercel.svg?raw"
 import railwaySvg from "@/assets/providers/railway.svg?raw"
+import githubSvg from "@/assets/providers/github.svg?raw"
 import type { Platform } from "@/lib/accounts"
 
 const RAW: Record<Platform, string> = {
   vercel: vercelSvg,
   railway: railwaySvg,
+  github: githubSvg,
 }
 
 function currentColorize(svg: string): string {
@@ -16,6 +18,7 @@ function currentColorize(svg: string): string {
 const PROCESSED: Record<Platform, string> = {
   vercel: currentColorize(RAW.vercel),
   railway: currentColorize(RAW.railway),
+  github: currentColorize(RAW.github),
 }
 
 type ProviderMarkProps = {

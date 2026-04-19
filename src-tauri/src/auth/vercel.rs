@@ -170,7 +170,7 @@ pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
         state = urlencoding::encode(&state),
     );
     log::info!(
-        target: "dev_radio::oauth",
+        target: "tiny_bell::oauth",
         "OAuth authorize → slug={} redirect_uri={}",
         INTEGRATION_SLUG, redirect
     );
@@ -243,6 +243,7 @@ pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
         enabled: true,
         created_at: chrono::Utc::now().timestamp_millis(),
         health: AccountHealth::Ok,
+        monitored_repos: None,
     };
     store::save_account(&app, &stored).map_err(|e| AuthError::Store(e))?;
 

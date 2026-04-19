@@ -59,7 +59,7 @@ pub async fn start_railway_oauth(app: AppHandle) -> Result<AccountProfile, AuthE
         cc = urlencoding::encode(&pkce.challenge),
     );
     log::info!(
-        target: "dev_radio::oauth",
+        target: "tiny_bell::oauth",
         "Railway OAuth authorize → redirect_uri={redirect}"
     );
 
@@ -124,6 +124,7 @@ pub async fn start_railway_oauth(app: AppHandle) -> Result<AccountProfile, AuthE
         enabled: true,
         created_at: now_ms,
         health: AccountHealth::Ok,
+        monitored_repos: None,
     };
     store::save_account(&app, &stored).map_err(AuthError::Store)?;
 

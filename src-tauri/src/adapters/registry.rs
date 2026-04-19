@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use crate::adapters::github::GitHubAdapter;
 use crate::adapters::railway::RailwayAdapter;
 use crate::adapters::r#trait::AdapterHandle;
 use crate::adapters::vercel::VercelAdapter;
@@ -44,6 +45,11 @@ impl AdapterRegistry {
                     account.id.clone(),
                     token,
                     account.scope_id.clone(),
+                )),
+                Platform::GitHub => Arc::new(GitHubAdapter::new(
+                    account.id.clone(),
+                    token,
+                    account.monitored_repos.clone(),
                 )),
             };
             map.insert(account.id.clone(), handle);

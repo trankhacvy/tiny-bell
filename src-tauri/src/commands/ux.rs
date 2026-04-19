@@ -2,9 +2,9 @@ use keyring::Entry;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
-const STORE_FILE: &str = "dev-radio.store.json";
+const STORE_FILE: &str = "tiny-bell.store.json";
 const CLOSE_HINT_KEY: &str = "ui.close_hint_seen";
-const KEYCHAIN_SERVICE: &str = "dev-radio";
+const KEYCHAIN_SERVICE: &str = "tiny-bell";
 const KEYCHAIN_VAULT_ACCOUNT: &str = "vault";
 
 #[tauri::command]

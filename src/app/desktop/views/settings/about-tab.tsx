@@ -58,7 +58,7 @@ export function SettingsAbout() {
         className="font-display text-[19px] font-semibold text-foreground"
         style={{ letterSpacing: -0.3 }}
       >
-        Dev Radio
+        Tiny Bell
       </h1>
       {version && (
         <p className="mt-[3px] font-mono-tabular text-[12px] text-faint">
@@ -98,7 +98,7 @@ export function SettingsAbout() {
       </div>
 
       <p className="mt-8 text-[11px] text-faint">
-        © {new Date().getFullYear()} Dev Radio. All your deploys are belong to you.
+        © {new Date().getFullYear()} khacvy. All your deploys are belong to you.
       </p>
     </div>
   )

@@ -1,6 +1,6 @@
 import { trackedInvoke } from "./tauri"
 
-export type Platform = "vercel" | "railway"
+export type Platform = "vercel" | "railway" | "github"
 
 export type AccountProfile = {
   id: string
@@ -21,6 +21,7 @@ export type AccountRecord = {
   enabled: boolean
   created_at: number
   health: AccountHealth
+  monitored_repos: string[] | null
 }
 
 export const accountsApi = {
@@ -85,7 +86,7 @@ export function friendlyAuthError(raw: unknown): string {
       return "Your Railway session expired. Please reconnect."
     }
     if (afterLower.includes("railway did not return a refresh_token")) {
-      return "Railway didn't return a refresh token — retry with the “offline access” consent."
+      return "Railway didn't return a refresh token. Retry with the 'offline access' consent."
     }
     if (
       afterLower.includes("not authorized") ||
@@ -93,7 +94,7 @@ export function friendlyAuthError(raw: unknown): string {
       afterLower.includes("unauthorized") ||
       afterLower.includes("invalid token")
     ) {
-      return "Railway rejected this token. Create a new one at railway.com/account/tokens and pick “No workspace”, or connect with OAuth instead."
+      return "The provider rejected this token. Check that it has the required scopes and try again."
     }
     return after || msg
   }
@@ -103,7 +104,24 @@ export function friendlyAuthError(raw: unknown): string {
   return msg
 }
 
+export type GitHubRepoInfo = {
+  full_name: string
+  name: string
+  is_private: boolean
+  default_branch: string | null
+}
+
+export const accountsApiGitHub = {
+  listRepos(accountId: string) {
+    return trackedInvoke<GitHubRepoInfo[]>("list_github_repos", { accountId })
+  },
+  setMonitoredRepos(accountId: string, repos: string[]) {
+    return trackedInvoke<void>("set_monitored_repos", { accountId, repos })
+  },
+}
+
 export const PLATFORM_LABEL: Record<Platform, string> = {
   vercel: "Vercel",
   railway: "Railway",
+  github: "GitHub",
 }

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub mod r#trait;
 pub mod vercel;
 pub mod railway;
+pub mod github;
 pub mod registry;
 
 pub use r#trait::{AdapterError, AdapterHandle, DeploymentMonitor};
@@ -12,6 +13,7 @@ pub use r#trait::{AdapterError, AdapterHandle, DeploymentMonitor};
 pub enum Platform {
     Vercel,
     Railway,
+    GitHub,
 }
 
 impl Platform {
@@ -19,6 +21,7 @@ impl Platform {
         match self {
             Platform::Vercel => "vercel",
             Platform::Railway => "railway",
+            Platform::GitHub => "github",
         }
     }
 
@@ -26,6 +29,7 @@ impl Platform {
         match s {
             "vercel" => Some(Platform::Vercel),
             "railway" => Some(Platform::Railway),
+            "github" => Some(Platform::GitHub),
             _ => None,
         }
     }

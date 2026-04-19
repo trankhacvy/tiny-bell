@@ -43,6 +43,8 @@
   --accent-vercel-d: oklch(0.96 0.003 260);
   --accent-railway-l: oklch(0.52 0.17 285);
   --accent-railway-d: oklch(0.72 0.16 285);
+  --accent-github-l: oklch(0.30 0.005 260);
+  --accent-github-d: oklch(0.92 0.005 260);
 }
 
 :root,
@@ -59,6 +61,7 @@
   --selected: var(--l-selected);
   --accent-vercel: var(--accent-vercel-l);
   --accent-railway: var(--accent-railway-l);
+  --accent-github: var(--accent-github-l);
   --accent-neutral: var(--accent-neutral-l);
   color-scheme: light;
 }
@@ -76,6 +79,7 @@
   --selected: var(--d-selected);
   --accent-vercel: var(--accent-vercel-d);
   --accent-railway: var(--accent-railway-d);
+  --accent-github: var(--accent-github-d);
   --accent-neutral: var(--accent-neutral-d);
   color-scheme: dark;
 }

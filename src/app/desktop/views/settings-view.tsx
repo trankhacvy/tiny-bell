@@ -28,7 +28,7 @@ export function SettingsView({
   }, [initialTab])
 
   return (
-    <DRWindow title="Dev Radio — Settings">
+    <DRWindow title="Tiny Bell — Settings">
       <DRTabs tabs={TABS} active={tab} onChange={setTab} />
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto w-full max-w-[520px]">

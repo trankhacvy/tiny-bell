@@ -7,6 +7,14 @@ import { ProviderMark } from "@/components/dr/provider-mark"
 import { DRMenu, DRMenuItem, DRMenuSeparator } from "@/components/dr/menu"
 import { AddAccountDialog } from "@/components/account/add-account-dialog"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { RepoSelector } from "@/components/account/repo-selector"
+import {
   accountsApi,
   PLATFORM_LABEL,
   type AccountHealth,
@@ -21,6 +29,9 @@ type Props = {
 
 export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [repoSelectorAccountId, setRepoSelectorAccountId] = useState<
+    string | null
+  >(null)
 
   async function handleRemove(id: string) {
     await accountsApi.remove(id)
@@ -114,6 +125,13 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
                 >
                   Rename…
                 </DRMenuItem>
+                {acc.platform === "github" ? (
+                  <DRMenuItem
+                    onSelect={() => setRepoSelectorAccountId(acc.id)}
+                  >
+                    Manage repositories…
+                  </DRMenuItem>
+                ) : null}
                 <DRMenuSeparator />
                 <DRMenuItem onSelect={() => void handleRemove(acc.id)}>
                   Sign out
@@ -153,6 +171,35 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
         onOpenChange={setDialogOpen}
         onConnected={handleConnected}
       />
+
+      <Dialog
+        open={repoSelectorAccountId !== null}
+        onOpenChange={(open) => {
+          if (!open) setRepoSelectorAccountId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage repositories</DialogTitle>
+            <DialogDescription>
+              Select which repositories to monitor for workflow runs.
+            </DialogDescription>
+          </DialogHeader>
+          {repoSelectorAccountId ? (
+            <RepoSelector
+              accountId={repoSelectorAccountId}
+              initialRepos={
+                accounts.find((a) => a.id === repoSelectorAccountId)
+                  ?.monitored_repos ?? undefined
+              }
+              onSave={() => {
+                setRepoSelectorAccountId(null)
+                void onAccountsChange()
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

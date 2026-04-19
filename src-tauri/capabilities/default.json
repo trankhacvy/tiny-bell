@@ -16,7 +16,8 @@
       "allow": [
         { "url": "https://vercel.com/*" },
         { "url": "https://railway.app/*" },
-        { "url": "https://railway.com/*" }
+        { "url": "https://railway.com/*" },
+        { "url": "https://github.com/*" }
       ]
     }
   ]
