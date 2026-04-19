@@ -9,7 +9,7 @@ use tokio::sync::oneshot;
 use crate::auth::AuthError;
 
 pub const LOOPBACK_HOST: &str = "127.0.0.1";
-pub const LOOPBACK_PORTS: [u16; 1] = [53123];
+pub const LOOPBACK_PORTS: [u16; 3] = [53123, 53124, 53125];
 pub const OAUTH_TIMEOUT_SECS: u64 = 300;
 
 pub struct PkcePair {

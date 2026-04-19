@@ -81,13 +81,19 @@ export function friendlyAuthError(raw: unknown): string {
   if (lower.startsWith("provider")) {
     const after = msg.slice(msg.indexOf(":") + 1).trim()
     const afterLower = after.toLowerCase()
+    if (afterLower.includes("invalid_grant")) {
+      return "Your Railway session expired. Please reconnect."
+    }
+    if (afterLower.includes("railway did not return a refresh_token")) {
+      return "Railway didn't return a refresh token — retry with the “offline access” consent."
+    }
     if (
       afterLower.includes("not authorized") ||
       afterLower.includes("not authenticated") ||
       afterLower.includes("unauthorized") ||
       afterLower.includes("invalid token")
     ) {
-      return "Railway rejected this token. Create a new one at railway.com/account/tokens and pick “No workspace”."
+      return "Railway rejected this token. Create a new one at railway.com/account/tokens and pick “No workspace”, or connect with OAuth instead."
     }
     return after || msg
   }

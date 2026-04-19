@@ -6,8 +6,9 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::adapters::registry::AdapterRegistry;
 use crate::adapters::{AccountProfile, Platform};
 use crate::auth::pat::fetch_railway_profile;
+use crate::auth::railway::start_railway_oauth;
 use crate::auth::vercel::{fetch_vercel_profile, start_vercel_oauth};
-use crate::auth::{oauth, pat, AuthError};
+use crate::auth::{oauth, pat, token_provider, AuthError};
 use crate::store::{self, AccountHealth, StoredAccount};
 
 #[derive(Debug, Serialize)]
@@ -35,10 +36,10 @@ impl From<StoredAccount> for AccountRecord {
     }
 }
 
-fn rehydrate_after_change(app: &AppHandle) {
+async fn rehydrate_after_change(app: &AppHandle) {
     if let Ok(accounts) = store::list_accounts(app) {
         if let Some(registry) = app.try_state::<Arc<AdapterRegistry>>() {
-            registry.inner().hydrate(&accounts);
+            registry.inner().hydrate(&accounts).await;
         }
         if !accounts.is_empty() {
             crate::poller::ensure_started(app);
@@ -57,9 +58,12 @@ pub async fn start_oauth(
         "vercel" => start_vercel_oauth(app.clone())
             .await
             .map_err(|e| e.to_string())?,
+        "railway" => start_railway_oauth(app.clone())
+            .await
+            .map_err(|e| e.to_string())?,
         other => return Err(format!("OAuth not supported for '{other}'")),
     };
-    rehydrate_after_change(&app);
+    rehydrate_after_change(&app).await;
     Ok(profile)
 }
 
@@ -84,7 +88,7 @@ pub async fn connect_with_token(
     )
     .await
     .map_err(|e| e.to_string())?;
-    rehydrate_after_change(&app);
+    rehydrate_after_change(&app).await;
     Ok(profile)
 }
 
@@ -106,13 +110,13 @@ pub async fn delete_account(app: AppHandle, id: String) -> Result<(), String> {
     if let Some(registry) = app.try_state::<Arc<AdapterRegistry>>() {
         registry.inner().remove(&id);
     }
-    rehydrate_after_change(&app);
+    rehydrate_after_change(&app).await;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn hydrate_adapters(app: AppHandle) -> Result<(), String> {
-    rehydrate_after_change(&app);
+    rehydrate_after_change(&app).await;
     Ok(())
 }
 
@@ -139,15 +143,27 @@ pub async fn validate_token(
         .find(|a| a.id == account_id)
         .ok_or_else(|| format!("no such account: {account_id}"))?;
 
-    let token = match crate::keychain::get_token(account.platform.key(), &account_id) {
+    let token = match token_provider::get_fresh_access_token(&account_id, account.platform).await {
         Ok(t) => t,
-        Err(e) => {
+        Err(AuthError::Provider(msg)) => {
+            log::warn!("validate_token: refresh rejected for {account_id}: {msg}");
+            let _ = store::update_account(&app, &account_id, |a| {
+                a.health = AccountHealth::NeedsReauth;
+            });
+            let _ = app.emit("accounts:changed", ());
+            return Ok(AccountHealth::NeedsReauth);
+        }
+        Err(AuthError::Keychain(e)) => {
             log::warn!("validate_token: keychain miss for {account_id}: {e}");
             let _ = store::update_account(&app, &account_id, |a| {
                 a.health = AccountHealth::Revoked;
             });
             let _ = app.emit("accounts:changed", ());
             return Ok(AccountHealth::Revoked);
+        }
+        Err(e) => {
+            log::warn!("validate_token: transient token error for {account_id}: {e}");
+            return Err("Could not verify account right now. Check your network and try again.".into());
         }
     };
 

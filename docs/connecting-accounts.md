@@ -24,13 +24,26 @@ If your company disallows third-party OAuth integrations, or you simply prefer t
 3. Paste the token.
 4. (Optional) Paste a **Team ID** (e.g. `team_xxx`) if the token is scoped to a team.
 
-## Railway — paste a token
+## Railway — two ways to connect
 
-Railway does not offer OAuth for third-party desktop apps. To connect:
+### 1. Connect with Railway (OAuth, recommended)
 
-1. Visit <https://railway.app/account/tokens>.
-2. Create a new API token.
-3. Click **Add account** → **Railway** tab → paste the token.
+Same loopback + PKCE flow as Vercel, built on Railway's native OAuth app.
+
+1. Click **Add account** → pick the **Railway** tab → **Connect with Railway**.
+2. Your default browser opens Railway's approval screen.
+3. Pick which workspaces (or individual projects) to grant Dev Radio read access to.
+4. Browser tab auto-closes; Dev Radio confirms the connection.
+
+Scopes requested: `openid email profile offline_access workspace:viewer project:viewer`. Access tokens expire every hour; Dev Radio refreshes them silently using the stored refresh token. If the refresh token is ever rejected (e.g. you revoked Dev Radio from Railway), the account is flagged as **Needs reconnect**.
+
+### 2. Paste a Railway API token
+
+If OAuth isn't available in your build or your org disallows it:
+
+1. Visit <https://railway.com/account/tokens>.
+2. Create a new token — select **No workspace** to make it account-scoped.
+3. Click **Add account** → **Railway** tab → **Paste token** → paste and connect.
 
 ## Where are tokens stored?
 
@@ -51,6 +64,7 @@ Tokens are never written to log files. Dev Radio's log pipeline runs a redactor 
 |---|---|---|
 | "Didn't receive approval — try again" | You closed the browser tab before approving, or waited longer than 5 minutes. | Try again. |
 | "Security check failed. Please try again." | CSRF `state` did not match. | Re-start the flow; do not reuse a stale browser tab. |
-| "OAuth is not configured in this build." | Your build does not include `VERCEL_CLIENT_ID`. | Use the **Paste token** option, or build with the env vars set. |
+| "OAuth is not configured in this build." | Your build does not include `VERCEL_CLIENT_ID` or `RAILWAY_CLIENT_ID`. | Use the **Paste token** option, or build with the env vars set. |
 | "Port 53123 in use" | Another app is holding the loopback port. | Close the other app, then retry. Dev Radio automatically tries 53124 / 53125 as fallbacks. |
-| Railway token rejected with "Invalid token" | Token revoked or missing scopes. | Create a new token. |
+| Railway token rejected with "Invalid token" | PAT revoked or missing scopes. | Create a new token, or connect with OAuth instead. |
+| "Your Railway session expired. Please reconnect." | Refresh token was rejected (revoked or older-than-rotated). | Remove the account and reconnect with OAuth. |

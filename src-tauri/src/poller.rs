@@ -139,7 +139,7 @@ impl<R: Runtime> Poller<R> {
         }
 
         let accounts = crate::store::list_accounts(&self.app).unwrap_or_default();
-        self.registry.hydrate(&accounts);
+        self.registry.hydrate(&accounts).await;
 
         let adapters = self.registry.all();
 

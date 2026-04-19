@@ -1,414 +1,273 @@
-# Dev Radio (kyoto) — Research Report
+# Dev Radio — Codebase Research Report
 
-> A deep dive into the Dev Radio codebase: what it is, how it works, and the interesting bits you won't find in the README.
+A deep-dive into the `dev-radio` repository: what it is, how it's built, and the specificities worth knowing before touching it.
+
+---
 
 ## 1. What is Dev Radio?
 
-**Dev Radio** is a cross-platform desktop app that lives in the menu bar / system tray and ambiently shows the status of your cloud deploys. It currently supports **Vercel** and **Railway**, and is architected so adding a new provider means implementing a single Rust trait.
+**Dev Radio** is a lightweight, cross-platform **desktop tray/menu-bar app** that gives developers real-time visibility into cloud build and deployment status across multiple providers. Tagline: *"Tune in to your deploys."*
 
-Key properties:
+- **Core use case**: glance at a color-coded tray icon to know the health of all your Vercel/Railway deploys without opening a browser.
+- **UI surfaces**: a small popover window attached to the tray, plus a standalone desktop window for onboarding and settings.
+- **Current platforms supported**: Vercel (REST + OAuth/PAT) and Railway (GraphQL + PAT). Architecture is explicitly designed to plug in more (Netlify, Render, GitHub Actions, etc.).
+- **Recent direction**: commit `f65c7c8` "Flat deployment feed + Linear/Raycast UI redesign" — the UI was recently overhauled toward a flatter, minimal, keyboard-centric aesthetic inspired by Linear and Raycast.
 
-- **Menubar-first**: the tray icon is the primary surface. A popover window shows deployments; a separate desktop window is used only for onboarding, settings, and about.
-- **Tauri v2 + React 19**: native Rust backend, web-tech frontend, single binary per-platform.
-- **Local-first security**: tokens never touch disk or localStorage; everything lives in the OS keychain, and logs are scrubbed through a redactor.
-- **Lazy everything**: the keychain isn't touched at boot (no prompts), the poller isn't started until an account exists, and the dock icon only appears when a real window is visible (macOS).
+---
 
-Stack summary:
+## 2. Tech Stack
 
-| Layer | Tech |
-|------|------|
-| Frontend | React 19, TypeScript, Vite, TailwindCSS v4, shadcn/ui, Lucide icons |
-| Backend | Rust 2021, Tauri v2, Tokio, Reqwest (rustls), Serde |
-| Storage | `keyring` crate (OS keychain) for secrets; `tauri-plugin-store` for metadata |
-| Auth | Vercel: OAuth2 (PKCE + loopback). Railway: PAT paste. Vercel also supports PAT. |
-| Tooling | pnpm, ESLint, Prettier, `cargo test --lib`, GitHub Actions CI on macOS |
+### Frontend (`src/`)
+- **React 19 + TypeScript + Vite** (dev server on port 1420)
+- **TailwindCSS v4** via `@tailwindcss/vite`
+- **shadcn/ui** (Radix primitives) + a custom `components/dr/` layer for Dev Radio's own design language
+- **Lucide-react** icons, **Sonner** for toasts, **Recharts** (declared but light use), **@dnd-kit** (declared)
+- No global state library — uses React hooks + Tauri event subscriptions as the source of truth
 
-## 2. Repository Layout
+### Backend (`src-tauri/`)
+- **Tauri v2** (Rust)
+- **Tokio** async runtime, **Reqwest** HTTP, **async-trait**, **Serde**
+- Plugins: `notification`, `autostart`, `global-shortcut`, `log`, `opener`, `store`
+- **`keyring`** crate for OS keychain (apple-native / windows-native / sync-secret-service)
+
+### Tooling
+- **pnpm** (package manager), **bun** is referenced in `tauri.conf.json` beforeDev/Build hooks
+- **GitHub Actions CI** on macOS: `pnpm typecheck` + `cargo test --lib`
+
+---
+
+## 3. Repository Layout
+
+Single package (not a monorepo). Two sibling codebases share the root:
 
 ```
-kyoto/
-├── src/                       React frontend
+chicago/
+├── src/                  # React frontend
+│   ├── main.tsx          # Bootstrap; branches on window.label (popover vs desktop)
 │   ├── app/
-│   │   ├── desktop/           Onboarding / Settings / About window
-│   │   └── popover/           Tray popover window (deployments list)
-│   ├── components/            shadcn primitives + feature components
-│   ├── hooks/                 use-dashboard (listens for backend events)
-│   ├── lib/                   Typed Tauri invoke wrappers + formatters
-│   ├── main.tsx               Dual-root bootstrap (picks app based on window label)
-│   └── index.css              Tailwind v4 + CSS variables
-├── src-tauri/                 Rust backend
+│   │   ├── popover/      # Tray popover UI
+│   │   └── desktop/      # Onboarding + settings window
+│   ├── components/
+│   │   ├── ui/           # shadcn primitives
+│   │   ├── dr/           # Custom Dev Radio design-language components
+│   │   ├── popover/      # Popover-specific pieces (header, footer, deploy-row, states)
+│   │   └── account/      # Account mgmt UI
+│   ├── hooks/            # use-dashboard, use-scope, use-theme, use-mobile
+│   └── lib/              # tauri command wrappers, formatters, prefs
+├── src-tauri/            # Rust backend
 │   ├── src/
-│   │   ├── adapters/          Platform trait + Vercel / Railway impls
-│   │   ├── auth/              OAuth (PKCE + loopback) and PAT
-│   │   ├── commands/          #[tauri::command] entrypoints
-│   │   ├── cache.rs           DashboardState + diffing
-│   │   ├── keychain.rs        Vault abstraction over `keyring` crate
-│   │   ├── poller.rs          Tokio background polling loop
-│   │   ├── redact.rs          Secret-stripping for logs
-│   │   ├── store.rs           Persistent metadata (non-secret)
-│   │   ├── tray.rs            Tray icon state machine + menu
-│   │   ├── window.rs          Show/hide/position helpers
-│   │   ├── platform.rs        macOS activation-policy toggle
-│   │   ├── notifications.rs   Native desktop notifications
-│   │   ├── lib.rs / main.rs   App wiring, plugin setup, setup hook
-│   ├── icons/                 Tray variants (gray/green/yellow/red/syncing + @1x/2x/3x)
-│   ├── capabilities/          Tauri v2 capability files (IPC scopes)
-│   └── tauri.conf.json        Windows, CSP, bundle config
-├── docs/                      connecting-accounts, prd, system-design
-├── .github/workflows/         CI (ci.yml), release pipeline (release.yml)
-├── plan.md / plan-v2.md / plan-v3.md   Historical planning docs (see §9)
-├── package.json / pnpm-lock.yaml
-└── README.md
+│   │   ├── lib.rs        # App init, plugins, invoke_handler registry
+│   │   ├── main.rs       # Thin entry
+│   │   ├── adapters/     # DeploymentMonitor trait + Vercel/Railway impls
+│   │   ├── auth/         # OAuth (PKCE + loopback) and PAT validation
+│   │   ├── commands/     # Tauri invoke handlers (accounts, deployments, window, ux, prefs)
+│   │   ├── poller.rs     # Tokio background poll loop
+│   │   ├── cache.rs      # In-memory DashboardState + diff detection
+│   │   ├── tray.rs       # Tray icon + health state machine
+│   │   ├── keychain.rs   # Unified-vault keychain wrapper
+│   │   ├── store.rs      # tauri-plugin-store persistence for accounts/settings
+│   │   ├── notifications.rs
+│   │   ├── redact.rs     # Regex-based secret redaction for logs
+│   │   ├── shortcut.rs   # Global hotkey
+│   │   └── window.rs     # Window lifecycle
+│   ├── icons/            # App + tray icons (gray/green/yellow/red/syncing)
+│   └── tauri.conf.json   # Windows, CSP, bundle config
+├── docs/
+│   ├── prd.md            # Full product requirements (user stories, flows, APIs)
+│   ├── system-design.md  # Visual/interaction design spec
+│   └── connecting-accounts.md
+├── package.json
+├── vite.config.ts
+└── .github/workflows/ci.yml
 ```
 
-## 3. High-Level Architecture
+---
 
-```
-          ┌──────────────────┐
- user ──▶ │   Tray icon      │ left-click / right-click
-          └────────┬─────────┘
-                   │
-          ┌────────┴──────────────────────────────┐
-          │           Tauri v2 app                 │
-          │                                        │
-          │  ┌──────────┐        ┌──────────────┐  │
-          │  │ Desktop  │        │  Popover     │  │
-          │  │ window   │        │  window      │  │
-          │  │ (React)  │        │  (React)     │  │
-          │  └────┬─────┘        └──────┬───────┘  │
-          │       │  invoke/event       │          │
-          │       └──────┬──────────────┘          │
-          │              ▼                         │
-          │  ┌───────────────────────────────┐    │
-          │  │  Rust commands (accounts,     │    │
-          │  │  deployments, window, ux)     │    │
-          │  └───────────┬───────────────────┘    │
-          │              │                         │
-          │  ┌───────────▼──────────┐  ┌────────┐ │
-          │  │ Poller (tokio task)  │─▶│ Cache  │─┐
-          │  └──────┬───────────────┘  └────────┘ │ emits
-          │         │                              │ dashboard:update
-          │  ┌──────▼──────┐  ┌───────────┐       │
-          │  │ Adapter     │  │ Keychain  │       │
-          │  │ registry    │  │ vault     │       │
-          │  └──┬─────┬────┘  └───────────┘       │
-          │     │     │                            │
-          │     ▼     ▼                            │
-          │   Vercel  Railway                      │
-          │   REST    GraphQL                      │
-          └────────────────────────────────────────┘
-```
+## 4. Architecture
 
-Two windows, one backend. The frontend talks to Rust through `invoke()` (request/response) and listens to Tauri events (server-push). The backend owns all state.
+### Two-Window Model
+- **`popover`** — 380×600, frameless, always-on-top, transparent, skipTaskbar. Anchored to the tray.
+- **`desktop`** — 560×680, resizable, normally hidden, launched for onboarding & settings.
+- `src/main.tsx` reads `window.label` and mounts either `<PopoverApp>` or `<DesktopApp>`.
 
-## 4. Backend — Rust Modules in Depth
+### Data Flow
+1. Rust **poller** runs on a Tokio interval (default 15s, range 5–600s, hot-swappable via `AtomicU64`).
+2. Poller fans out across all enabled accounts (bounded `JoinSet`), calls each adapter.
+3. New state is diffed against the **in-memory cache** (`cache.rs`); a `DiffEvent` is generated for any state change.
+4. Rust emits a `dashboard:update` Tauri event → frontend hooks (`use-dashboard`) re-render.
+5. Tray icon and native notifications are recomputed from the same diff.
 
-### 4.1 Domain Models — `adapters/mod.rs`
+No persistent queue, no cron, no DB — everything lives in memory during the process lifetime. Accounts and settings are persisted via `tauri-plugin-store` (JSON file); tokens go in the OS keychain.
 
+### Adapter Pattern
+`src-tauri/src/adapters/trait.rs` defines `DeploymentMonitor` (async). Each platform implements it in its own subfolder (`adapters/vercel/`, `adapters/railway/`) with `mod.rs`, `client.rs` (HTTP/GraphQL), `types.rs` (DTOs), `mapper.rs` (DTO → domain). An `AdapterRegistry` holds `Arc<dyn DeploymentMonitor>` instances keyed by account ID. Adding a new provider = implement the trait + register it; the frontend is provider-agnostic.
+
+### Tray Health State Machine (`tray.rs`)
+- **Gray** — no accounts connected
+- **Green** — all deployments `Ready`
+- **Yellow** — any `Building` / `Queued`
+- **Red** — any `Error` within last 30 min
+- **Syncing** — initial poll in flight
+
+Each state maps to a separate icon file; macOS uses template-mode icons with an overlay dot.
+
+---
+
+## 5. Domain Model
+
+### Rust (`src-tauri/src/adapters/mod.rs`)
 ```rust
 enum Platform { Vercel, Railway }
 enum DeploymentState { Queued, Building, Ready, Error, Canceled, Unknown }
 
 struct AccountProfile { id, platform, display_name, email, avatar_url, scope_id }
 struct Project        { id, account_id, platform, name, url, framework, latest_deployment }
-struct Deployment     { id, project_id, state, environment, url, inspector_url,
-                        branch, commit_sha, commit_message, author_name, author_avatar,
-                        created_at, finished_at, duration_ms, progress }
+struct Deployment     { id, project_id, service_id?, service_name?, state, environment,
+                        url?, inspector_url?, branch?, commit_sha?, commit_message?,
+                        author_name?, author_avatar?, created_at, finished_at?,
+                        duration_ms?, progress? }
 ```
 
-`scope_id` is the polymorphic "which slice of the account" field — team ID on Vercel, project/environment ID on Railway.
-
-### 4.2 Adapter Trait — `adapters/trait.rs`
-
+### Persistence (`src-tauri/src/store.rs`)
 ```rust
-#[async_trait]
-pub trait DeploymentMonitor: Send + Sync + Debug {
-    fn platform(&self) -> Platform;
-    fn account_id(&self) -> &str;
-    async fn list_projects(&self) -> Result<Vec<Project>, AdapterError>;
-    async fn list_deployments(&self, project_id: &str, limit: usize)
-        -> Result<Vec<Deployment>, AdapterError>;
-}
+enum AccountHealth { Ok, NeedsReauth, Revoked }
+
+struct StoredAccount { id, platform, display_name, scope_id?, enabled, created_at, health }
+// Token is NOT stored here — it lives in the keychain, keyed by account id
 ```
 
-`AdapterError` distinguishes transient vs terminal errors: `Unauthorized`, `RateLimited`, `Network`, `Parse`, `Unknown`. The poller uses this to decide whether to keep retrying or surface an error to the UI.
-
-### 4.3 Adapter Implementations
-
-- **Vercel** (`adapters/vercel/`) — REST over `https://api.vercel.com`. Appends `?teamId=...` when `scope_id` is set. Handles pagination, maps API DTOs to domain models in `mapper.rs`.
-- **Railway** (`adapters/railway/`) — GraphQL POST to `https://backboard.railway.app/graphql/v2`. One query for projects, another for recent deployments per project.
-
-Both adapters get their bearer token from the keychain vault at construction time, not per-request.
-
-### 4.4 Adapter Registry — `adapters/registry.rs`
-
-`HashMap<String, Arc<dyn DeploymentMonitor>>` keyed by `account_id`. The poller asks the registry to hydrate itself from the store before each round, and the registry only creates adapters for enabled accounts whose tokens are available in the vault.
-
-### 4.5 Auth — `auth/`
-
-- **OAuth (PKCE + loopback)** — `auth/oauth.rs` + `auth/vercel.rs`. Generates a 32-byte random code verifier, derives SHA-256 challenge, spawns a loopback HTTP server on `127.0.0.1:53123`, opens the authorize URL via `tauri-plugin-opener`, waits for the redirect, validates state, exchanges the code for an access token, then fetches the user profile to populate `AccountProfile`.
-- **PAT (paste token)** — `auth/pat.rs`. User pastes a token; we call a "whoami"-style endpoint on the platform to validate and populate profile metadata, then store the token in the vault.
-
-### 4.6 Keychain Vault — `keychain.rs`
-
-The single most interesting design choice. Rather than storing one keychain entry per account (which prompts the user once per account on macOS), Dev Radio uses a **vault**: a single keychain entry (`service="dev-radio"`, `account="vault"`) containing a JSON map `{ account_id: token }`.
-
-Behavior:
-
-- **Lazy load** — `ensure_loaded()` is called on the first poll, not at boot. No prompts during splash.
-- **In-memory cache** — Once loaded, the map lives in a `OnceCell<RwLock<HashMap<String,String>>>` for the lifetime of the process.
-- **Legacy migration** — If a token isn't in the vault, `get_token` falls back to a legacy per-account entry, imports it, and deletes the old one. Older installs migrate transparently on first poll.
-- **Flush on write** — Any `store_token` / `delete_token` re-serializes the full map back to the OS keychain.
-
-### 4.7 Persistent Store — `store.rs`
-
-Uses `tauri-plugin-store` (JSON file in the app data directory). Stores only non-secret metadata: the list of `StoredAccount { id, platform, display_name, scope_id, enabled, created_at }` plus small UX flags like `ui.close_hint_seen`. Tokens **never** go here.
-
-### 4.8 Polling Loop — `poller.rs`
-
-Tokio task started by the setup hook if any accounts exist, or when the first account is added. Per tick:
-
-1. `keychain::ensure_loaded()` — first tick pays the OS prompt cost.
-2. Load accounts from store → hydrate registry.
-3. For each enabled adapter: `list_projects()` → for each project: `list_deployments(limit=10)`. Parallelized with a concurrency cap.
-4. Build a fresh `DashboardState`.
-5. `cache.replace_and_diff(new)` — swaps state and emits `DiffEvent`s for any project whose latest-deployment state transitioned.
-6. Diff events drive native desktop notifications (`notifications.rs`) and tray health updates (`tray.rs`).
-7. Emit `dashboard:update` event so any listening window refreshes.
-
-Interval defaults to 15 s, adjustable via `set_poll_interval` (clamped). `refresh_now` triggers an immediate poll without resetting the interval timer.
-
-### 4.9 Cache & Diff — `cache.rs`
-
-`DashboardState { projects, deployments_by_project, last_refreshed_at, last_error, offline, polling }`. Held in an `RwLock`. `replace_and_diff` compares the latest deployment per project between old and new state and returns a list of transition events consumed by the tray and notifier.
-
-### 4.10 Tray — `tray.rs`
-
-The tray icon is a finite-state machine:
-
-| State    | Trigger |
-|----------|---------|
-| Setup    | No accounts yet |
-| Syncing  | First poll in progress |
-| Gray     | Offline or no recent data |
-| Green    | All latest deployments Ready |
-| Yellow   | Any Building / Queued |
-| Red      | Any Error within last ~30 min |
-
-Icon PNGs live in `src-tauri/icons/tray/` as 1x/2x/3x variants so macOS picks the right DPI.
-
-Click behavior:
-
-- **Left click**: toggle popover (if accounts) or open the desktop onboarding window (if no accounts).
-- **Right click**: context menu — Open Dev Radio, Refresh Now, Settings, Quit.
-
-### 4.11 Windows & Platform — `window.rs`, `platform.rs`, `tauri.conf.json`
-
-Two windows declared in `tauri.conf.json`:
-
-| Window   | Size     | Flags |
-|----------|----------|-------|
-| desktop  | 560×680  | decorated, resizable-ish, starts hidden |
-| popover  | 380×600  | frameless, alwaysOnTop, skipTaskbar, transparent |
-
-`window.rs` computes the popover position from the tray rect at show-time and auto-hides on blur. `platform.rs::set_visible_dock(app, bool)` is macOS-only and toggles `ActivationPolicy::Regular` vs `Accessory` so the dock icon only appears while a real window is visible. On Windows/Linux it's a no-op.
-
-Closing the desktop window **hides** it (doesn't quit). A one-shot "I'm still in your menu bar" hint dialog fires the first time, then `ui.close_hint_seen` is flipped in the store.
-
-### 4.12 Redactor — `redact.rs`
-
-Regex-based log scrubber installed as the format callback of `tauri-plugin-log`. Matches four shapes of secrets:
-
-1. `Bearer <...>` → `Bearer ***`
-2. JSON `"token":"..."` (and the other key names)
-3. URL-encoded `token=...&...`
-4. Plain `token: ...`
-
-Covered keys: `token`, `access_token`, `refresh_token`, `authorization`, `code`, `client_secret`, `code_verifier`, `password`, `api_key` / `api-key`.
-
-### 4.13 Notifications — `notifications.rs`
-
-Thin wrapper over `tauri-plugin-notification`. Called from the poller when a project transitions into `Ready` or `Error`. No persistent queue or in-app notification center.
-
-## 5. Tauri Command Surface
-
-Everything the frontend can call. All return `Result<T, String>` at the IPC boundary.
-
-### Accounts — `commands/accounts.rs`
-
-| Command | Purpose |
-|---|---|
-| `start_oauth(platform)` | Kick off PKCE OAuth (Vercel) |
-| `cancel_oauth()` | Abort in-flight OAuth |
-| `connect_with_token(platform, token, scope_id?)` | PAT flow for either provider |
-| `list_accounts()` | Return `Vec<AccountRecord>` |
-| `delete_account(id)` | Remove from store + vault |
-| `set_account_enabled(id, enabled)` | Toggle polling for one account |
-| `rename_account(id, display_name)` | Update metadata |
-| `hydrate_adapters()` | Force registry sync (called on popover focus) |
-
-### Deployments — `commands/deployments.rs`
-
-| Command | Purpose |
-|---|---|
-| `get_dashboard()` | Return current cached `DashboardState` |
-| `refresh_now()` | Force immediate poll |
-| `set_poll_interval(secs)` / `get_poll_interval()` | Read/write polling interval (5 s – 10 min) |
-| `open_external(url)` | Open URL in system browser |
-
-### Window — `commands/window.rs`
-
-| Command | Purpose |
-|---|---|
-| `open_desktop(view)` | Show desktop window and emit `desktop:route` |
-| `close_desktop()` | Hide desktop window |
-| `toggle_popover()` / `show_popover()` / `hide_popover()` | Popover lifecycle |
-| `quit_app()` | Process exit |
-| `get_autostart()` / `set_autostart(enabled)` | Launch-at-login toggle |
-
-### UX — `commands/ux.rs`
-
-| Command | Purpose |
-|---|---|
-| `has_seen_close_hint()` / `mark_close_hint_seen()` | One-shot close-hint dialog |
-
-### Events (backend → frontend)
-
-- `dashboard:update` — cache updated, frontend should re-fetch via `get_dashboard`
-- `accounts:changed` — account list changed
-- `desktop:route` — change desktop view programmatically
-- `desktop:close-hint` — show close-hint dialog
-- `oauth:complete` / `oauth:error` — signal OAuth result to any open dialog
-
-## 6. Frontend — React 19
-
-### 6.1 Dual-Root Bootstrap — `src/main.tsx`
-
-```ts
-const label = getCurrentWindow().label
-if (label === "popover") { /* import PopoverApp */ }
-else                     { /* import DesktopApp */ }
-```
-
-Each window is a **separate React root** with **no shared state**. All cross-window coordination goes through backend events. This keeps things simple at the cost of each window re-fetching what it needs on focus.
-
-### 6.2 Desktop App — `src/app/desktop/`
-
-State-machine router with three views:
-
-- **OnboardingView** — `AddAccountForm` (tabs: Vercel / Railway). Auto-advances to settings on first successful connect.
-- **SettingsView** — account list (toggle enabled / rename / delete), polling interval slider, launch-at-login checkbox.
-- **AboutView** — version + links.
-
-Also owns the `CloseHintDialog` that fires once when the user first closes the desktop window.
-
-### 6.3 Popover App — `src/app/popover/`
-
-Display-only view:
-
-- **DeploymentsView** if accounts exist — header with account switcher + settings gear, scrollable list of `DeploymentCard`s, footer with last-refreshed + interval.
-- **EmptyConnectView** otherwise — a single "Connect account" button that opens the desktop window into onboarding.
-
-Each `DeploymentCard` shows provider logo, project name, branch + commit SHA, author avatar, relative time, and a colored `StatusIcon`.
-
-### 6.4 Libraries & Helpers
-
-- `src/lib/accounts.ts`, `src/lib/deployments.ts` — typed wrappers over `invoke()` so the rest of the UI never touches the raw Tauri API.
-- `src/lib/tauri.ts` — `trackedInvoke` / `trackedEmit` add debug instrumentation (see `components/debug-panel.tsx`) — useful during development, harmless in release.
-- `src/lib/format.ts` — `formatRelative("2m ago")`, human status labels, etc.
-- `src/lib/provider-theme.ts` — per-provider accent colors.
-- `src/hooks/use-dashboard.ts` — subscribes to `dashboard:update`, returns current state.
-- `src/components/external-link-guard.tsx` — intercepts internal links that shouldn't escape to the system browser.
-
-### 6.5 UI System
-
-shadcn/ui primitives copied into `src/components/ui/` (button, dialog, input, tabs, select, toggle, dropdown-menu, alert-dialog, sheet, card, separator, badge, avatar, skeleton, sonner toast, TanStack table). TailwindCSS **v4** via `@tailwindcss/vite`; theming is done with CSS variables in `src/index.css`, dark mode through `next-themes`.
-
-## 7. Security Model
-
-- **CSP (`tauri.conf.json`)** — `connect-src` is limited to `api.vercel.com`, `vercel.com`, `backboard.railway.app`, `railway.app`. `img-src` allows avatars from GitHub, Vercel, and Railway only. No remote scripts.
-- **Tokens** — OS keychain vault only. Never in state files, never in frontend memory after the initial paste step, never in logs.
-- **Logs** — Everything passes through `redact.rs` before hitting disk. Bearer tokens, JSON secrets, URL-encoded secrets, and bare `key: value` shapes are all caught.
-- **OAuth state & PKCE** — State param validated with constant-time compare; PKCE verifier is cryptographically random.
-- **External URLs** — Only opened via `tauri-plugin-opener`, not via `window.open`. Frontend `ExternalLinkGuard` is a second line of defense.
-
-## 8. Build, Tooling, CI
-
-### Scripts (`package.json`)
-
-```
-pnpm dev        # vite dev server
-pnpm build      # tsc -b && vite build
-pnpm lint       # eslint
-pnpm typecheck  # tsc --noEmit
-pnpm tauri      # passthrough to tauri CLI
-```
-
-### Rust profile (`src-tauri/Cargo.toml`)
-
-Release build: `lto = true`, `codegen-units = 1`, `opt-level = "s"`, `panic = "abort"`, `strip = true` — aggressively size-optimized.
-
-### GitHub Actions
-
-- `ci.yml` — macOS runner: Rust stable + cached target, `pnpm install`, `pnpm typecheck`, `cargo test --lib` (with `VERCEL_CLIENT_ID` / `VERCEL_CLIENT_SECRET` injected from repo secrets).
-- `release.yml` — exists in `.github/workflows/` for packaged releases.
-
-### Tests
-
-- **Rust**: `cargo test --lib` covers `redact.rs` (regex cases), `cache.rs` (diff logic), and a couple of keychain tests (marked `#[ignore]` because they touch the real OS keychain).
-- **Frontend**: no Jest/Vitest yet — typecheck is the only check.
-
-## 9. Planning Docs (plan.md, plan-v2.md, plan-v3.md)
-
-Three historical planning documents tell the evolution of the product:
-
-- **plan.md** (~41 KB) — V1. Auth-only: OAuth PKCE details, loopback port strategy, token exchange, PAT flows, initial keychain strategy (per-account entries). Mostly superseded.
-- **plan-v2.md** (~47 KB) — V2. Full menubar: poller loop, tray health FSM, cache/diff algorithm, both provider adapters, `DeploymentMonitor` trait, notifications. Largely shipped — the popover **was** the main window in V2.
-- **plan-v3.md** (~29 KB) — V3, the current direction. Splits the UI into a **desktop window** (onboarding/settings/about) and a **popover** (display-only deployments), introduces the **lazy keychain vault**, the **runtime macOS activation policy toggle**, and the **one-shot close-hint dialog**. The implementation in `src/` and `src-tauri/` matches V3.
-
-If you want to understand *why* the code looks the way it does, read plan-v3.md first — it's the closest to current state.
-
-## 10. Quirks, Gotchas, Non-Obvious Choices
-
-1. **Dual-root React with no shared state** — Each window re-queries what it needs. Simpler than Redux across windows, but means a little redundant work on focus.
-2. **Vault (single keychain entry) vs per-account** — Trades a tiny amount of atomicity for a dramatic reduction in OS keychain prompts, especially on macOS. Legacy entries are transparently migrated.
-3. **Lazy keychain** — No prompts on boot. The first poll is where the user sees the system prompt — which is intuitive ("I just added an account, of course it's asking").
-4. **Activation policy is macOS-only** — dock icon hidden/shown based on whether a real window is visible. Windows/Linux don't have the concept, so it's a no-op.
-5. **Close ≠ quit** — The desktop window's close button hides the window. Quitting requires the tray menu's Quit item. The close-hint dialog exists precisely because this is surprising.
-6. **Health aggregation window** — A project with an `Error` in the last ~30 min keeps the tray Red even if the latest deployment is now `Ready`. Deliberately sticky so you don't miss recent failures.
-7. **Poller tasks are detached** — No graceful shutdown; relies on process exit. Fine for a tray app; not fine if this ever got embedded somewhere else.
-8. **Loopback port is hardcoded to 53123** — There's a `LOOPBACK_PORTS` array but it currently has length 1. If the port is busy, OAuth fails; fallback ports are mentioned in docs but not implemented.
-9. **Redactor is regex-only** — Good enough for conventional log shapes; wouldn't catch tokens hidden inside a base64 blob or unusual formats. Acceptable because tokens shouldn't be in logs at all — this is defense in depth.
-10. **No integration/E2E tests** — Unit tests cover the pure-Rust pieces (redactor, cache diff). Anything touching HTTP, OS keychain, or the UI is untested in CI.
-11. **`trackedInvoke` / `trackedEmit` debug panel** — Every IPC call is optionally logged to an in-process ring buffer surfaced by `DebugPanel`. Handy for development; invisible in production unless explicitly opened.
-12. **TailwindCSS v4** — Uses the new Vite plugin + CSS-first config. Different from v3; don't look for a `tailwind.config.js`.
-
-## 11. Extending the System
-
-The cleanest extension points, in rough order of effort:
-
-- **Add a provider** — Implement `DeploymentMonitor` in `adapters/<name>/`, add a variant to `Platform`, wire it into the registry factory and the `AddAccountForm` tabs. The poller, cache, tray, and UI don't need to change.
-- **New deployment metadata** — Extend `Deployment` struct → update both mappers → surface in `DeploymentCard`.
-- **New notification types** — Hook into `replace_and_diff` output in the poller and fan out through `notifications.rs`.
-- **Different polling strategy** (webhooks, SSE, etc.) — The poller is the only producer into `cache`; swapping it out doesn't ripple.
-- **Additional window** — Add an entry in `tauri.conf.json`, branch in `main.tsx`, create a new React root.
-
-## 12. Quick File-Level Index
-
-Hot files for navigation:
-
-- `src-tauri/src/lib.rs` — app builder, plugin setup, `setup()` hook
-- `src-tauri/src/poller.rs` — the heart of the runtime
-- `src-tauri/src/keychain.rs` — vault layer
-- `src-tauri/src/cache.rs` — state + diff
-- `src-tauri/src/adapters/trait.rs` — the abstraction everything hinges on
-- `src-tauri/src/tray.rs` — tray FSM
-- `src-tauri/tauri.conf.json` — windows + CSP
-- `src/main.tsx` — dual-root entry
-- `src/app/desktop/desktop-app.tsx` / `src/app/popover/popover-app.tsx` — window roots
-- `src/lib/accounts.ts` / `src/lib/deployments.ts` — IPC surface from the frontend's perspective
-- `plan-v3.md` — current design intent
+### Frontend (`src/lib/accounts.ts`, `src/lib/deployments.ts`)
+TypeScript mirrors of the Rust models for type-safe `invoke()` calls.
 
 ---
 
-**TL;DR** — Dev Radio is a well-factored Tauri v2 + React 19 menubar app with a clean platform-adapter pattern, a deliberately lazy security model built around an OS-keychain vault, and a split-window UI (tray popover for viewing, separate desktop window for configuring). The Rust backend does all the work; the frontend is a thin, event-driven view. The three plan-vN.md docs let you read the design history; `plan-v3.md` is the map to the current code.
+## 6. External Integrations
+
+### Vercel (`https://api.vercel.com`)
+| Purpose | Endpoint |
+|---|---|
+| Validate token / profile | `GET /v2/user` |
+| Teams for scope picker | `GET /v2/teams` |
+| List projects | `GET /v9/projects` |
+| Poll deployments | `GET /v6/deployments` |
+| Deployment detail | `GET /v13/deployments/{id}` |
+| Cancel | `PATCH /v12/deployments/{id}/cancel` |
+
+**Auth**: Bearer token. Supports both PAT and **OAuth PKCE** via a loopback server on `127.0.0.1:53123` (fallbacks `53124`, `53125`). 5-minute timeout, state validation for CSRF.
+
+### Railway (`https://backboard.railway.com/graphql/v2`)
+GraphQL. Queries: `me`, `projects`, `deployments`. Mutation: `serviceInstanceRedeploy`. **Token-only** — no OAuth.
+
+### CSP (tauri.conf.json)
+`connect-src` is locked to the two API hosts; avatar hosts (GitHub, Vercel, Railway) are whitelisted for `img-src`.
+
+---
+
+## 7. Tauri Commands (RPC surface)
+
+Registered in `src-tauri/src/lib.rs` `invoke_handler`. Grouped roughly:
+
+- **Accounts**: `start_oauth`, `cancel_oauth`, `connect_with_token`, `list_accounts`, `delete_account`, `set_account_enabled`, `rename_account`, `validate_token`
+- **Deployments**: `get_dashboard`, `refresh_now`, `set_poll_interval`, `get_poll_interval`, `hydrate_adapters`
+- **Windows**: `open_desktop`, `close_desktop`, `toggle_popover`, `show_popover`, `hide_popover`, `quit_app`
+- **UX**: `open_external`
+- **Prefs**: polling interval, theme, autostart getters/setters
+
+Frontend calls go through `src/lib/tauri.ts` (`trackedInvoke` helper) for centralized error capture.
+
+---
+
+## 8. Security & Privacy
+
+- **Tokens** → OS keychain only (service = `dev-radio`). Stored as a single serialized JSON "vault" under account `vault`, rather than one keychain entry per token. This avoids keychain API fragility; all tokens hydrate into memory once at startup.
+- **Legacy keys** (`{platform}:{account_id}`) auto-migrate to the vault.
+- **Log redaction** (`src-tauri/src/redact.rs`) — a regex pipeline strips bearer headers, API keys, JSON token fields, query params, and plain `key=value` assignments. Has dedicated unit tests.
+- **CSP** restricts network egress to the two API hosts.
+- **No telemetry** by default.
+- **Notifications** deduped by deployment ID.
+
+---
+
+## 9. Configuration
+
+### Env vars (dev builds)
+- `VERCEL_CLIENT_ID`, `VERCEL_CLIENT_SECRET` — enables Vercel OAuth. Without them, the app falls back to PAT-only.
+
+### Persisted settings (via tauri-plugin-store → `dev-radio.store.json`)
+- `accounts[]` (StoredAccount records)
+- `settings` (polling interval, theme, autostart, etc.)
+
+### Tauri bundle targets
+- macOS DMG (universal, notarized)
+- Windows MSI (code-signed)
+- Linux AppImage + .deb
+
+---
+
+## 10. Scripts (`package.json`)
+
+| Script | Action |
+|---|---|
+| `pnpm dev` | Vite dev server (1420) |
+| `pnpm build` | `tsc -b && vite build` |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint |
+| `pnpm format` | Prettier write |
+| `pnpm preview` | Vite preview |
+| `pnpm tauri` | Tauri CLI passthrough (`pnpm tauri dev`, `pnpm tauri build`) |
+
+Typical dev flow: `pnpm install && pnpm tauri dev`.
+
+---
+
+## 11. Testing & CI
+
+- **Rust**: `cargo test --lib` runs on `macos-latest` on push and PRs. Unit tests exist for the redactor and adapters (fixtures via `wiremock`).
+- **Frontend**: only `pnpm typecheck` runs in CI. No Vitest/Jest suite visible.
+- CI file: `.github/workflows/ci.yml`.
+
+---
+
+## 12. Notable Patterns & Quirks
+
+1. **Rust as the source of truth.** The frontend holds no derived state beyond UI concerns; it listens for `dashboard:update` events and renders whatever Rust sent.
+2. **Custom `dr/` component layer** over shadcn — this is where the "Linear/Raycast" aesthetic lives (custom badge, button, status-glyph, provider chip/mark, window chrome, menu).
+3. **Stale-while-revalidate** in the popover: the cached DashboardState is shown immediately; the polling indicator communicates background refresh.
+4. **Hot-swappable polling interval** via `AtomicU64` — no poller restart when the user changes the cadence in settings.
+5. **Bounded fan-out**: accounts are polled concurrently but with a semaphore to avoid hammering APIs on users with many accounts.
+6. **Unified keychain vault** (not one entry per token) — an intentional choice to sidestep per-entry keychain bugs, at the cost of rewriting the full JSON on each change.
+7. **No router**; window identity (popover vs desktop) is the routing boundary, and within each window, views are swapped by React state.
+8. **Docs quality is unusually high** for a v0.1 project: `docs/prd.md` (~774 lines) covers user stories, flows, APIs, extensibility; `docs/system-design.md` (~346 lines) is a full design system with colors, typography, component contracts, accessibility, and motion specs.
+9. **No `CLAUDE.md`** in the repo.
+
+---
+
+## 13. Key Files to Know
+
+| Concern | File |
+|---|---|
+| App bootstrap (Rust) | `src-tauri/src/lib.rs` |
+| Adapter trait | `src-tauri/src/adapters/trait.rs` |
+| Vercel adapter | `src-tauri/src/adapters/vercel/{mod,client,mapper,types}.rs` |
+| Railway adapter | `src-tauri/src/adapters/railway/{mod,client,mapper,types}.rs` |
+| Poller | `src-tauri/src/poller.rs` |
+| Cache + diff | `src-tauri/src/cache.rs` |
+| Tray/health | `src-tauri/src/tray.rs` |
+| Keychain vault | `src-tauri/src/keychain.rs` |
+| Redactor | `src-tauri/src/redact.rs` |
+| OAuth PKCE | `src-tauri/src/auth/oauth.rs` |
+| Popover UI | `src/app/popover/popover-app.tsx` |
+| Desktop UI | `src/app/desktop/desktop-app.tsx` |
+| Dashboard hook | `src/hooks/use-dashboard.ts` |
+| Account wrappers | `src/lib/accounts.ts` |
+| Deployment wrappers | `src/lib/deployments.ts` |
+| Frontend bootstrap | `src/main.tsx` |
+| Tauri config | `src-tauri/tauri.conf.json` |
+
+---
+
+## 14. Status & Trajectory
+
+- Current state: v0.1 with Vercel + Railway end-to-end, tray + popover + settings + onboarding, OAuth working for Vercel.
+- Last major change: flat deployment feed + Linear/Raycast-style UI redesign (PR #1, commit `f65c7c8`).
+- Extensibility is the dominant architectural theme — the adapter trait and `docs/prd.md`'s 5-step "add a new platform" guide make it clear the authors expect Netlify, Render, GH Actions, etc. to follow.

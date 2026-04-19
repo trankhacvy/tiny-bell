@@ -19,10 +19,15 @@ impl AdapterRegistry {
         }
     }
 
-    pub fn hydrate(&self, accounts: &[StoredAccount]) {
+    pub async fn hydrate(&self, accounts: &[StoredAccount]) {
         let mut map: HashMap<String, AdapterHandle> = HashMap::new();
         for account in accounts.iter().filter(|a| a.enabled) {
-            let token = match crate::keychain::get_token(account.platform.key(), &account.id) {
+            let token = match crate::auth::token_provider::get_fresh_access_token(
+                &account.id,
+                account.platform,
+            )
+            .await
+            {
                 Ok(t) => t,
                 Err(e) => {
                     log::warn!("skipping {}: no token ({e})", account.id);

@@ -3,11 +3,50 @@ use std::sync::{Arc, RwLock};
 
 use keyring::Entry;
 use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
 
 use crate::auth::AuthError;
 
 const SERVICE: &str = "dev-radio";
 const VAULT_ACCOUNT: &str = "vault";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "token_type", rename_all = "snake_case")]
+pub enum StoredSecret {
+    Pat {
+        value: String,
+    },
+    Oauth {
+        access_token: String,
+        refresh_token: String,
+        expires_at_ms: i64,
+    },
+}
+
+impl StoredSecret {
+    pub fn access_token(&self) -> &str {
+        match self {
+            StoredSecret::Pat { value } => value,
+            StoredSecret::Oauth { access_token, .. } => access_token,
+        }
+    }
+}
+
+fn parse_secret(raw: &str) -> Result<StoredSecret, AuthError> {
+    let trimmed = raw.trim_start();
+    if trimmed.starts_with('{') {
+        return serde_json::from_str::<StoredSecret>(raw)
+            .map_err(|e| AuthError::Keychain(format!("corrupted secret payload: {e}")));
+    }
+    Ok(StoredSecret::Pat {
+        value: raw.to_string(),
+    })
+}
+
+fn serialize_secret(secret: &StoredSecret) -> Result<String, AuthError> {
+    serde_json::to_string(secret)
+        .map_err(|e| AuthError::Keychain(format!("serialize secret: {e}")))
+}
 
 type Vault = Arc<RwLock<HashMap<String, String>>>;
 
@@ -90,42 +129,56 @@ pub fn migrate_legacy_for(platform: &str, account_id: &str) -> Result<bool, Auth
     Ok(true)
 }
 
-pub fn store_token(_platform: &str, account_id: &str, token: &str) -> Result<(), AuthError> {
+pub fn store_secret(account_id: &str, secret: &StoredSecret) -> Result<(), AuthError> {
     ensure_loaded()?;
+    let serialized = serialize_secret(secret)?;
     {
         let mut guard = vault().write().unwrap_or_else(|p| p.into_inner());
-        guard.insert(account_id.into(), token.into());
+        guard.insert(account_id.into(), serialized);
     }
     flush()?;
     tracing::info!(
         target: "dev_radio::keychain",
         account_id = account_id,
-        "token stored"
+        "secret stored"
     );
     Ok(())
 }
 
-pub fn get_token(platform: &str, account_id: &str) -> Result<String, AuthError> {
+pub fn get_secret(platform: &str, account_id: &str) -> Result<StoredSecret, AuthError> {
     ensure_loaded()?;
-    if let Some(token) = vault()
+    if let Some(raw) = vault()
         .read()
         .unwrap_or_else(|p| p.into_inner())
         .get(account_id)
         .cloned()
     {
-        return Ok(token);
+        return parse_secret(&raw);
     }
     if migrate_legacy_for(platform, account_id)? {
-        if let Some(token) = vault()
+        if let Some(raw) = vault()
             .read()
             .unwrap_or_else(|p| p.into_inner())
             .get(account_id)
             .cloned()
         {
-            return Ok(token);
+            return parse_secret(&raw);
         }
     }
     Err(AuthError::Keychain("missing token".into()))
+}
+
+pub fn store_token(_platform: &str, account_id: &str, token: &str) -> Result<(), AuthError> {
+    store_secret(
+        account_id,
+        &StoredSecret::Pat {
+            value: token.to_string(),
+        },
+    )
+}
+
+pub fn get_token(platform: &str, account_id: &str) -> Result<String, AuthError> {
+    get_secret(platform, account_id).map(|s| s.access_token().to_string())
 }
 
 pub fn delete_token(_platform: &str, account_id: &str) -> Result<(), AuthError> {

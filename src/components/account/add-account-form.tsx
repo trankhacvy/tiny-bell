@@ -41,6 +41,11 @@ const TOKEN_LINKS: Record<Platform, TokenLink> = {
   },
 }
 
+const OAUTH_BUTTON_LABEL: Record<Platform, string> = {
+  vercel: "Connect with Vercel",
+  railway: "Connect with Railway",
+}
+
 export type AddAccountFormProps = {
   platform: Platform
   onConnected: (profile: AccountProfile) => void
@@ -52,9 +57,7 @@ export function AddAccountForm({
   onConnected,
   onResetRef,
 }: AddAccountFormProps) {
-  const [mode, setMode] = useState<Mode>(
-    platform === "vercel" ? "oauth" : "pat",
-  )
+  const [mode, setMode] = useState<Mode>("oauth")
   const [busy, setBusy] = useState(false)
   const [oauthPending, setOauthPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +67,7 @@ export function AddAccountForm({
   const link = TOKEN_LINKS[platform]
 
   useEffect(() => {
-    setMode(platform === "vercel" ? "oauth" : "pat")
+    setMode("oauth")
     setToken("")
     setScope("")
     setError(null)
@@ -77,9 +80,9 @@ export function AddAccountForm({
       setError(null)
       setToken("")
       setScope("")
-      setMode(platform === "vercel" ? "oauth" : "pat")
+      setMode("oauth")
     })
-  }, [onResetRef, platform])
+  }, [onResetRef])
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined
@@ -145,21 +148,16 @@ export function AddAccountForm({
     <div className="flex flex-col gap-4">
       <ProviderChip platform={platform} size="md" />
 
-      {platform === "vercel" ? (
-        <div className="inline-flex gap-0.5 rounded-[6px] border border-border bg-surface-2 p-0.5">
-          <ModePill
-            active={mode === "oauth"}
-            onClick={() => setMode("oauth")}
-          >
-            OAuth
-          </ModePill>
-          <ModePill active={mode === "pat"} onClick={() => setMode("pat")}>
-            Paste token
-          </ModePill>
-        </div>
-      ) : null}
+      <div className="inline-flex gap-0.5 rounded-[6px] border border-border bg-surface-2 p-0.5">
+        <ModePill active={mode === "oauth"} onClick={() => setMode("oauth")}>
+          OAuth
+        </ModePill>
+        <ModePill active={mode === "pat"} onClick={() => setMode("pat")}>
+          Paste token
+        </ModePill>
+      </div>
 
-      {platform === "vercel" && mode === "oauth" ? (
+      {mode === "oauth" ? (
         <div className="flex flex-col gap-2">
           <p className="text-[12px] text-muted-foreground">
             Opens your browser to approve Dev Radio. The token is stored only
@@ -172,7 +170,7 @@ export function AddAccountForm({
             onClick={handleOAuth}
             disabled={busy}
           >
-            {busy ? "Waiting for browser…" : "Connect with Vercel"}
+            {busy ? "Waiting for browser…" : OAUTH_BUTTON_LABEL[platform]}
           </DRButton>
           {oauthPending ? (
             <DRButton
