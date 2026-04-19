@@ -19,6 +19,7 @@ const MARK_PX: Record<"sm" | "md" | "lg", number> = {
 const ACCENT_VAR: Record<Platform, string> = {
   vercel: "var(--accent-vercel)",
   railway: "var(--accent-railway)",
+  github: "var(--accent-github)",
 }
 
 export function ProviderChip({

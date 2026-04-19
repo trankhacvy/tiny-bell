@@ -37,13 +37,21 @@ const TOKEN_LINKS: Record<Platform, TokenLink> = {
     label: "railway.com/account/tokens",
     scopeLabel: null,
     placeholder: "rlwy_…",
-    hint: "Select “No workspace” to create an account token.",
+    hint: "Select 'No workspace' to create an account token.",
+  },
+  github: {
+    href: "https://github.com/settings/tokens",
+    label: "github.com/settings/tokens",
+    scopeLabel: null,
+    placeholder: "ghp_… or github_pat_…",
+    hint: "Classic: select 'repo' and 'read:user' scopes.",
   },
 }
 
 const OAUTH_BUTTON_LABEL: Record<Platform, string> = {
   vercel: "Connect with Vercel",
   railway: "Connect with Railway",
+  github: "Connect with GitHub",
 }
 
 export type AddAccountFormProps = {
@@ -192,7 +200,9 @@ export function AddAccountForm({
             >
               {platform === "vercel"
                 ? "Personal Access Token"
-                : "Railway API token"}
+                : platform === "github"
+                  ? "GitHub Personal Access Token"
+                  : "Railway API token"}
             </label>
             <DRInput
               id={`${platform}-token`}

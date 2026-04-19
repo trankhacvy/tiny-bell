@@ -45,7 +45,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://vercel.com https://*.vercel.com https://railway.app https://*.railway.app https://railway.com https://*.railway.com https://*.githubusercontent.com https://avatars.githubusercontent.com; connect-src 'self' ipc: http://ipc.localhost https://api.vercel.com https://vercel.com https://backboard.railway.app https://railway.app https://backboard.railway.com https://railway.com; font-src 'self' data:"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://vercel.com https://*.vercel.com https://railway.app https://*.railway.app https://railway.com https://*.railway.com https://*.githubusercontent.com https://avatars.githubusercontent.com; connect-src 'self' ipc: http://ipc.localhost https://api.vercel.com https://vercel.com https://backboard.railway.app https://railway.app https://backboard.railway.com https://railway.com https://api.github.com https://github.com; font-src 'self' data:"
     }
   },
   "bundle": {

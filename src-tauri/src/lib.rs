@@ -104,6 +104,8 @@ pub fn run() {
             account_cmds::rename_account,
             account_cmds::validate_token,
             account_cmds::hydrate_adapters,
+            account_cmds::list_github_repos,
+            account_cmds::set_monitored_repos,
             deployment_cmds::get_dashboard,
             deployment_cmds::refresh_now,
             deployment_cmds::set_poll_interval,

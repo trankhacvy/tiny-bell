@@ -115,14 +115,14 @@ export function OnboardingView({
 }
 
 const AVAILABLE: { platform: Platform; desc: string }[] = [
-  { platform: "vercel", desc: "OAuth or personal access token · Teams supported" },
-  { platform: "railway", desc: "Personal access token · Projects & environments" },
+  { platform: "vercel", desc: "OAuth or personal access token \u00b7 Teams supported" },
+  { platform: "railway", desc: "Personal access token \u00b7 Projects & environments" },
+  { platform: "github", desc: "OAuth or personal access token \u00b7 Actions monitoring" },
 ]
 
 const COMING_SOON = [
   { label: "Netlify", desc: "On the roadmap" },
   { label: "Render", desc: "On the roadmap" },
-  { label: "GitHub Actions", desc: "On the roadmap" },
 ]
 
 type WelcomeStepProps = {
@@ -183,26 +183,30 @@ function WelcomeStep({ onPick, onSkip }: WelcomeStepProps) {
           })}
         </div>
 
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-          Coming soon
-        </p>
-        <div className="flex flex-col gap-2">
-          {COMING_SOON.map(({ label, desc }) => (
-            <div
-              key={label}
-              className="flex items-center gap-3 rounded-[8px] border border-border p-[12px_14px] opacity-50"
-            >
-              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-border bg-surface-2 text-[11px] font-semibold text-faint">
-                {label[0]}
-              </span>
-              <span className="flex-1">
-                <span className="block text-[13px] font-semibold text-foreground">{label}</span>
-                <span className="block text-[12px] text-faint">{desc}</span>
-              </span>
-              <DRBadge tone="neutral">Soon</DRBadge>
+        {COMING_SOON.length > 0 && (
+          <>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+              Coming soon
+            </p>
+            <div className="flex flex-col gap-2">
+              {COMING_SOON.map(({ label, desc }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-3 rounded-[8px] border border-border p-[12px_14px] opacity-50"
+                >
+                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-border bg-surface-2 text-[11px] font-semibold text-faint">
+                    {label[0]}
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-[13px] font-semibold text-foreground">{label}</span>
+                    <span className="block text-[12px] text-faint">{desc}</span>
+                  </span>
+                  <DRBadge tone="neutral">Soon</DRBadge>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-subtle px-8 py-4">
@@ -218,7 +222,7 @@ function WelcomeStep({ onPick, onSkip }: WelcomeStepProps) {
             trailing={<Icon name="chevron-right" size={13} />}
             onClick={() => selected && onPick([selected])}
           >
-            Continue with {selected ? PLATFORM_LABEL[selected] : "…"}
+            Continue with {selected ? PLATFORM_LABEL[selected] : "\u2026"}
           </DRButton>
         </div>
       </div>
@@ -237,7 +241,9 @@ function ConnectStep({ platform, onConnected, onBack, onCancel }: ConnectStepPro
   const heroGradient =
     platform === "vercel"
       ? "linear-gradient(180deg, oklch(0.97 0.003 85) 0%, var(--bg) 100%)"
-      : "linear-gradient(180deg, oklch(0.97 0.022 285) 0%, var(--bg) 100%)"
+      : platform === "github"
+        ? "linear-gradient(180deg, oklch(0.97 0.003 260) 0%, var(--bg) 100%)"
+        : "linear-gradient(180deg, oklch(0.97 0.022 285) 0%, var(--bg) 100%)"
 
   return (
     <div className="flex flex-1 flex-col">
@@ -262,7 +268,11 @@ function ConnectStep({ platform, onConnected, onBack, onCancel }: ConnectStepPro
             className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-[10px] border border-border"
             style={{
               background:
-                platform === "vercel" ? "oklch(0.98 0 0)" : "oklch(0.96 0.02 285)",
+                platform === "vercel"
+                  ? "oklch(0.98 0 0)"
+                  : platform === "github"
+                    ? "oklch(0.98 0.003 260)"
+                    : "oklch(0.96 0.02 285)",
             }}
           >
             <ProviderMark platform={platform} size={22} />
@@ -277,7 +287,9 @@ function ConnectStep({ platform, onConnected, onBack, onCancel }: ConnectStepPro
             <p className="mt-[2px] text-[12px] text-muted-foreground">
               {platform === "vercel"
                 ? "Read-only access to your projects and deployments."
-                : "Paste a token. OAuth isn't supported by Railway yet."}
+                : platform === "github"
+                  ? "Read-only access to your repositories and workflow runs."
+                  : "Paste a token. OAuth isn't supported by Railway yet."}
             </p>
           </div>
         </div>
@@ -386,7 +398,7 @@ function SuccessStep({ connected, projects, onDone, onAddAnother }: SuccessStepP
                 <span className="font-mono-tabular text-[11px] text-faint">
                   {p.latest_deployment
                     ? formatRelative(p.latest_deployment.created_at)
-                    : "—"}
+                    : "\u2014"}
                 </span>
               </div>
             ))}
@@ -408,7 +420,7 @@ function SuccessStep({ connected, projects, onDone, onAddAnother }: SuccessStepP
           size="sm"
           onClick={onDone}
           trailing={
-            <Kbd className="ml-1 border-white/20 bg-white/15 text-inherit">⌃⌥R</Kbd>
+            <Kbd className="ml-1 border-white/20 bg-white/15 text-inherit">{"\u2303\u2325R"}</Kbd>
           }
         >
           Open menubar

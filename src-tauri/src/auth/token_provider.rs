@@ -35,7 +35,7 @@ pub async fn get_fresh_access_token(
                     keychain::store_secret(account_id, &new_secret)?;
                     Ok(refreshed.access_token)
                 }
-                Platform::Vercel => Ok(access_token),
+                Platform::Vercel | Platform::GitHub => Ok(access_token),
             }
         }
     }

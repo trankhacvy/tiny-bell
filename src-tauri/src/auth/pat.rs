@@ -16,6 +16,7 @@ pub async fn connect_via_pat(
     let profile = match platform {
         Platform::Vercel => fetch_vercel_profile(&token, scope_id.as_deref()).await?,
         Platform::Railway => fetch_railway_profile(&token).await?,
+        Platform::GitHub => crate::auth::github::fetch_github_profile(&token).await?,
     };
 
     let account_id = uuid::Uuid::new_v4().to_string();
@@ -28,6 +29,7 @@ pub async fn connect_via_pat(
         enabled: true,
         created_at: chrono::Utc::now().timestamp_millis(),
         health: AccountHealth::Ok,
+        monitored_repos: None,
     };
     store::save_account(app, &stored).map_err(|e| AuthError::Store(e))?;
 

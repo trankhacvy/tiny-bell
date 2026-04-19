@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::registry::AdapterRegistry;
 use crate::adapters::{AccountProfile, Platform};
+use crate::auth::github::{fetch_github_profile, start_github_oauth};
 use crate::auth::pat::fetch_railway_profile;
 use crate::auth::railway::start_railway_oauth;
 use crate::auth::vercel::{fetch_vercel_profile, start_vercel_oauth};
@@ -20,6 +21,7 @@ pub struct AccountRecord {
     pub enabled: bool,
     pub created_at: i64,
     pub health: AccountHealth,
+    pub monitored_repos: Option<Vec<String>>,
 }
 
 impl From<StoredAccount> for AccountRecord {
@@ -32,6 +34,7 @@ impl From<StoredAccount> for AccountRecord {
             enabled: s.enabled,
             created_at: s.created_at,
             health: s.health,
+            monitored_repos: s.monitored_repos,
         }
     }
 }
@@ -59,6 +62,9 @@ pub async fn start_oauth(
             .await
             .map_err(|e| e.to_string())?,
         "railway" => start_railway_oauth(app.clone())
+            .await
+            .map_err(|e| e.to_string())?,
+        "github" => start_github_oauth(app.clone())
             .await
             .map_err(|e| e.to_string())?,
         other => return Err(format!("OAuth not supported for '{other}'")),
@@ -170,6 +176,7 @@ pub async fn validate_token(
     let result: Result<AccountProfile, AuthError> = match account.platform {
         Platform::Vercel => fetch_vercel_profile(&token, account.scope_id.as_deref()).await,
         Platform::Railway => fetch_railway_profile(&token).await,
+        Platform::GitHub => fetch_github_profile(&token).await,
     };
 
     let health = match result {
@@ -217,4 +224,69 @@ pub async fn rename_account(
         a.display_name = trimmed;
     })?;
     Ok(updated.map(AccountRecord::from))
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitHubRepoInfo {
+    pub full_name: String,
+    pub name: String,
+    pub is_private: bool,
+    pub default_branch: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_github_repos(
+    app: AppHandle,
+    account_id: String,
+) -> Result<Vec<GitHubRepoInfo>, String> {
+    let accounts = store::list_accounts(&app)?;
+    let account = accounts
+        .into_iter()
+        .find(|a| a.id == account_id && a.platform == Platform::GitHub)
+        .ok_or_else(|| format!("no GitHub account: {account_id}"))?;
+
+    let token = token_provider::get_fresh_access_token(&account.id, account.platform)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let client = reqwest::Client::new();
+    let res = client
+        .get("https://api.github.com/user/repos?sort=pushed&per_page=100&type=all")
+        .bearer_auth(&token)
+        .header("User-Agent", "dev-radio")
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("GitHub API error: {}", res.status()));
+    }
+
+    let repos: Vec<crate::adapters::github::types::RepoDto> =
+        res.json().await.map_err(|e| e.to_string())?;
+
+    Ok(repos
+        .into_iter()
+        .map(|r| GitHubRepoInfo {
+            full_name: r.full_name,
+            name: r.name,
+            is_private: r.is_private,
+            default_branch: r.default_branch,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn set_monitored_repos(
+    app: AppHandle,
+    account_id: String,
+    repos: Vec<String>,
+) -> Result<(), String> {
+    let capped: Vec<String> = repos.into_iter().take(30).collect();
+    store::update_account(&app, &account_id, |a| {
+        a.monitored_repos = Some(capped);
+    })?;
+    rehydrate_after_change(&app).await;
+    Ok(())
 }
