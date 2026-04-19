@@ -8,7 +8,7 @@ use crate::adapters::{Deployment, DeploymentState, Project};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DashboardState {
     pub projects: Vec<Project>,
-    pub deployments_by_project: HashMap<String, Vec<Deployment>>,
+    pub deployments: Vec<Deployment>,
     pub last_refreshed_at: Option<i64>,
     pub last_error: Option<String>,
     pub offline: bool,
@@ -43,7 +43,7 @@ impl Cache {
     pub fn mark_empty(&self) {
         let mut guard = self.inner.write().unwrap_or_else(|p| p.into_inner());
         guard.projects.clear();
-        guard.deployments_by_project.clear();
+        guard.deployments.clear();
         guard.last_error = None;
         guard.offline = false;
         guard.last_refreshed_at = Some(chrono::Utc::now().timestamp_millis());
@@ -65,23 +65,21 @@ impl Cache {
         let prev = std::mem::take(&mut *guard);
         let mut events = Vec::new();
 
-        for project in &new_state.projects {
-            let Some(current_list) = new_state.deployments_by_project.get(&project.id) else {
-                continue;
-            };
-            let Some(current) = current_list.first() else {
-                continue;
-            };
-            let previous_state = prev
-                .deployments_by_project
-                .get(&project.id)
-                .and_then(|lst| lst.iter().find(|d| d.id == current.id))
-                .map(|d| d.state.clone());
+        let prev_by_id: HashMap<&String, &Deployment> =
+            prev.deployments.iter().map(|d| (&d.id, d)).collect();
+        let project_names: HashMap<&String, &String> =
+            new_state.projects.iter().map(|p| (&p.id, &p.name)).collect();
 
+        for current in &new_state.deployments {
+            let previous_state = prev_by_id.get(&current.id).map(|d| d.state.clone());
             if previous_state.as_ref() != Some(&current.state) {
+                let project_name = project_names
+                    .get(&current.project_id)
+                    .map(|n| (*n).clone())
+                    .unwrap_or_else(|| current.project_id.clone());
                 events.push(DiffEvent {
-                    project_id: project.id.clone(),
-                    project_name: project.name.clone(),
+                    project_id: current.project_id.clone(),
+                    project_name,
                     deployment_id: current.id.clone(),
                     previous: previous_state,
                     current: current.state.clone(),
@@ -115,6 +113,8 @@ mod tests {
         Deployment {
             id: id.into(),
             project_id: project_id.into(),
+            service_id: None,
+            service_name: None,
             state,
             environment: "production".into(),
             url: None,
@@ -137,12 +137,13 @@ mod tests {
         let mut state = DashboardState::default();
         state.projects.push(project("p1", "acme"));
         state
-            .deployments_by_project
-            .insert("p1".into(), vec![deployment("d1", "p1", DeploymentState::Ready)]);
+            .deployments
+            .push(deployment("d1", "p1", DeploymentState::Ready));
         let diff = cache.replace_and_diff(state);
         assert_eq!(diff.len(), 1);
         assert!(diff[0].previous.is_none());
         assert_eq!(diff[0].current, DeploymentState::Ready);
+        assert_eq!(diff[0].project_name, "acme");
     }
 
     #[test]
@@ -150,8 +151,8 @@ mod tests {
         let cache = Cache::new();
         let mut s1 = DashboardState::default();
         s1.projects.push(project("p1", "acme"));
-        s1.deployments_by_project
-            .insert("p1".into(), vec![deployment("d1", "p1", DeploymentState::Ready)]);
+        s1.deployments
+            .push(deployment("d1", "p1", DeploymentState::Ready));
         cache.replace_and_diff(s1.clone());
         let diff = cache.replace_and_diff(s1);
         assert!(diff.is_empty());
@@ -162,14 +163,14 @@ mod tests {
         let cache = Cache::new();
         let mut s1 = DashboardState::default();
         s1.projects.push(project("p1", "acme"));
-        s1.deployments_by_project
-            .insert("p1".into(), vec![deployment("d1", "p1", DeploymentState::Building)]);
+        s1.deployments
+            .push(deployment("d1", "p1", DeploymentState::Building));
         cache.replace_and_diff(s1);
 
         let mut s2 = DashboardState::default();
         s2.projects.push(project("p1", "acme"));
-        s2.deployments_by_project
-            .insert("p1".into(), vec![deployment("d1", "p1", DeploymentState::Ready)]);
+        s2.deployments
+            .push(deployment("d1", "p1", DeploymentState::Ready));
         let diff = cache.replace_and_diff(s2);
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].previous, Some(DeploymentState::Building));

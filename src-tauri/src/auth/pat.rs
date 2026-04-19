@@ -3,9 +3,9 @@ use tauri::AppHandle;
 use crate::adapters::{AccountProfile, Platform};
 use crate::auth::vercel::fetch_vercel_profile;
 use crate::auth::AuthError;
-use crate::store::{self, StoredAccount};
+use crate::store::{self, AccountHealth, StoredAccount};
 
-pub const DEFAULT_RAILWAY_GRAPHQL_URL: &str = "https://backboard.railway.app/graphql/v2";
+pub const DEFAULT_RAILWAY_GRAPHQL_URL: &str = "https://backboard.railway.com/graphql/v2";
 
 pub async fn connect_via_pat(
     app: &AppHandle,
@@ -27,6 +27,7 @@ pub async fn connect_via_pat(
         scope_id: profile.scope_id.clone().or(scope_id),
         enabled: true,
         created_at: chrono::Utc::now().timestamp_millis(),
+        health: AccountHealth::Ok,
     };
     store::save_account(app, &stored).map_err(|e| AuthError::Store(e))?;
 
@@ -44,6 +45,7 @@ pub async fn fetch_railway_profile_with_url(
     token: &str,
     graphql_url: &str,
 ) -> Result<AccountProfile, AuthError> {
+    log::info!(target: "dev_radio::railway_pat", "fetch_railway_profile → {graphql_url}");
     let client = reqwest::Client::new();
     let body = serde_json::json!({
         "query": "query { me { id email name avatar } }"
@@ -54,20 +56,31 @@ pub async fn fetch_railway_profile_with_url(
         .json(&body)
         .send()
         .await
-        .map_err(AuthError::from)?;
+        .map_err(|e| {
+            log::warn!(target: "dev_radio::railway_pat", "network error: {e}");
+            AuthError::from(e)
+        })?;
 
-    if res.status() == reqwest::StatusCode::UNAUTHORIZED
-        || res.status() == reqwest::StatusCode::FORBIDDEN
-    {
+    let status = res.status();
+    log::info!(target: "dev_radio::railway_pat", "railway response status={status}");
+
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        log::warn!(target: "dev_radio::railway_pat", "railway returned {status}");
         return Err(AuthError::Provider("Invalid token".into()));
     }
 
     let value: serde_json::Value = res
         .error_for_status()
-        .map_err(AuthError::from)?
+        .map_err(|e| {
+            log::warn!(target: "dev_radio::railway_pat", "http error: {e}");
+            AuthError::from(e)
+        })?
         .json()
         .await
-        .map_err(AuthError::from)?;
+        .map_err(|e| {
+            log::warn!(target: "dev_radio::railway_pat", "json parse error: {e}");
+            AuthError::from(e)
+        })?;
 
     if let Some(errors) = value.get("errors").and_then(|v| v.as_array()) {
         if let Some(first) = errors.first() {
@@ -76,6 +89,7 @@ pub async fn fetch_railway_profile_with_url(
                 .and_then(|m| m.as_str())
                 .unwrap_or("GraphQL error")
                 .to_string();
+            log::warn!(target: "dev_radio::railway_pat", "graphql error: {msg}");
             return Err(AuthError::Provider(msg));
         }
     }
@@ -83,7 +97,10 @@ pub async fn fetch_railway_profile_with_url(
     let me = value.get("data").and_then(|d| d.get("me"));
     let me = match me {
         Some(v) if !v.is_null() => v,
-        _ => return Err(AuthError::Provider("Invalid token".into())),
+        _ => {
+            log::warn!(target: "dev_radio::railway_pat", "me is null — likely workspace/project token");
+            return Err(AuthError::Provider("Invalid token".into()));
+        }
     };
 
     let id = me

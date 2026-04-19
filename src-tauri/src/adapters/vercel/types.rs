@@ -45,6 +45,8 @@ pub struct DeploymentsResponse {
 pub struct DeploymentDto {
     pub uid: String,
     #[serde(default)]
+    pub project_id: Option<String>,
+    #[serde(default)]
     pub url: Option<String>,
     #[serde(default)]
     pub inspector_url: Option<String>,

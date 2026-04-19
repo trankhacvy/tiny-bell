@@ -31,9 +31,9 @@ pub trait DeploymentMonitor: Send + Sync + std::fmt::Debug {
     fn platform(&self) -> Platform;
     fn account_id(&self) -> &str;
     async fn list_projects(&self) -> Result<Vec<Project>, AdapterError>;
-    async fn list_deployments(
+    async fn list_recent_deployments(
         &self,
-        project_id: &str,
+        project_ids: Option<&[String]>,
         limit: usize,
     ) -> Result<Vec<Deployment>, AdapterError>;
 }

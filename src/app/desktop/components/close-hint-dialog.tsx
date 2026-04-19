@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useState } from "react"
 
 import {
   Dialog,
@@ -7,8 +7,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DRButton } from "@/components/dr/button"
+import { Kbd } from "@/components/dr/kbd"
 import { windowApi } from "@/lib/deployments"
+import { prefsApi } from "@/lib/prefs"
 
 type Props = {
   open: boolean
@@ -16,13 +19,17 @@ type Props = {
 }
 
 export function CloseHintDialog({ open, onOpenChange }: Props) {
-  useEffect(() => {
-    if (open) {
-      void windowApi.markCloseHintSeen()
-    }
-  }, [open])
+  const [dontShow, setDontShow] = useState(true)
 
-  function handleGotIt() {
+  async function handleClose() {
+    await windowApi.markCloseHintSeen()
+    if (dontShow) {
+      try {
+        await prefsApi.set("hide_to_menubar_shown", true)
+      } catch {
+        /* swallow */
+      }
+    }
     onOpenChange(false)
   }
 
@@ -35,18 +42,33 @@ export function CloseHintDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Still running in the menu bar</DialogTitle>
-          <DialogDescription>
-            Dev Radio keeps polling your deploys in the background. Click the
-            radio icon in the menu bar any time. To fully exit, use the tray
-            menu's Quit option or press ⌘Q.
+          <DialogTitle className="font-display text-[15px] font-semibold">
+            Dev Radio keeps running
+          </DialogTitle>
+          <DialogDescription className="text-[12.5px]">
+            It lives in your menubar. Click the radio icon anytime, or press{" "}
+            <Kbd>⌥⌘D</Kbd>. To quit fully, right-click the menubar icon and
+            choose Quit.
           </DialogDescription>
         </DialogHeader>
+        <label className="flex items-center gap-2 text-[12.5px] text-foreground">
+          <Checkbox
+            checked={dontShow}
+            onCheckedChange={(v) => setDontShow(v === true)}
+          />
+          Don't show this again
+        </label>
         <div className="mt-2 flex justify-end gap-2">
-          <Button variant="ghost" onClick={handleQuit}>
+          <DRButton variant="ghost" size="sm" onClick={handleQuit}>
             Quit now
-          </Button>
-          <Button onClick={handleGotIt}>Got it</Button>
+          </DRButton>
+          <DRButton
+            variant="primary"
+            size="sm"
+            onClick={() => void handleClose()}
+          >
+            Got it
+          </DRButton>
         </div>
       </DialogContent>
     </Dialog>

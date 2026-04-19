@@ -21,17 +21,12 @@ pub fn parse_ts(s: Option<&str>) -> i64 {
         .unwrap_or(0)
 }
 
-pub fn build_project(
-    service_id: &str,
-    project_name: &str,
-    service_name: &str,
-    account_id: &str,
-) -> Project {
+pub fn build_project(project_id: &str, project_name: &str, account_id: &str) -> Project {
     Project {
-        id: service_id.to_string(),
+        id: project_id.to_string(),
         account_id: account_id.to_string(),
         platform: Platform::Railway,
-        name: format!("{project_name}/{service_name}"),
+        name: project_name.to_string(),
         url: None,
         framework: None,
         latest_deployment: None,
@@ -75,9 +70,16 @@ pub fn deployment_from_node(node: DeploymentNode, project_id: &str) -> Deploymen
         }
     });
 
+    let (service_id, service_name) = match node.service {
+        Some(s) => (Some(s.id), s.name),
+        None => (None, None),
+    };
+
     Deployment {
         id: node.id,
         project_id: project_id.to_string(),
+        service_id,
+        service_name,
         state,
         environment: "production".to_string(),
         url: node.url.or(node.static_url),

@@ -5,8 +5,10 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::registry::AdapterRegistry;
 use crate::adapters::{AccountProfile, Platform};
-use crate::auth::{oauth, pat, vercel};
-use crate::store::{self, StoredAccount};
+use crate::auth::pat::fetch_railway_profile;
+use crate::auth::vercel::{fetch_vercel_profile, start_vercel_oauth};
+use crate::auth::{oauth, pat, AuthError};
+use crate::store::{self, AccountHealth, StoredAccount};
 
 #[derive(Debug, Serialize)]
 pub struct AccountRecord {
@@ -16,6 +18,7 @@ pub struct AccountRecord {
     pub scope_id: Option<String>,
     pub enabled: bool,
     pub created_at: i64,
+    pub health: AccountHealth,
 }
 
 impl From<StoredAccount> for AccountRecord {
@@ -27,6 +30,7 @@ impl From<StoredAccount> for AccountRecord {
             scope_id: s.scope_id,
             enabled: s.enabled,
             created_at: s.created_at,
+            health: s.health,
         }
     }
 }
@@ -50,7 +54,7 @@ pub async fn start_oauth(
     platform: String,
 ) -> Result<AccountProfile, String> {
     let profile = match platform.as_str() {
-        "vercel" => vercel::start_vercel_oauth(app.clone())
+        "vercel" => start_vercel_oauth(app.clone())
             .await
             .map_err(|e| e.to_string())?,
         other => return Err(format!("OAuth not supported for '{other}'")),
@@ -122,6 +126,65 @@ pub async fn set_account_enabled(
         a.enabled = enabled;
     })?;
     Ok(updated.map(AccountRecord::from))
+}
+
+#[tauri::command]
+pub async fn validate_token(
+    app: AppHandle,
+    account_id: String,
+) -> Result<AccountHealth, String> {
+    let accounts = store::list_accounts(&app)?;
+    let account = accounts
+        .into_iter()
+        .find(|a| a.id == account_id)
+        .ok_or_else(|| format!("no such account: {account_id}"))?;
+
+    let token = match crate::keychain::get_token(account.platform.key(), &account_id) {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("validate_token: keychain miss for {account_id}: {e}");
+            let _ = store::update_account(&app, &account_id, |a| {
+                a.health = AccountHealth::Revoked;
+            });
+            let _ = app.emit("accounts:changed", ());
+            return Ok(AccountHealth::Revoked);
+        }
+    };
+
+    let result: Result<AccountProfile, AuthError> = match account.platform {
+        Platform::Vercel => fetch_vercel_profile(&token, account.scope_id.as_deref()).await,
+        Platform::Railway => fetch_railway_profile(&token).await,
+    };
+
+    let health = match result {
+        Ok(_) => Some(AccountHealth::Ok),
+        Err(AuthError::Provider(msg)) => {
+            log::warn!("validate_token: provider error for {account_id}: {msg}");
+            let lower = msg.to_lowercase();
+            if msg.contains("401") || lower.contains("unauthor") {
+                Some(AccountHealth::NeedsReauth)
+            } else if msg.contains("403") || lower.contains("revok") {
+                Some(AccountHealth::Revoked)
+            } else {
+                None
+            }
+        }
+        Err(e) => {
+            log::warn!("validate_token: transient error for {account_id}: {e}");
+            None
+        }
+    };
+
+    match health {
+        Some(h) => {
+            let _ = store::update_account(&app, &account_id, |a| {
+                a.health = h;
+            });
+            let _ = app.emit("accounts:changed", ());
+            Ok(h)
+        }
+        None => Err("Could not verify account right now. Check your network and try again.".into()),
+    }
 }
 
 #[tauri::command]

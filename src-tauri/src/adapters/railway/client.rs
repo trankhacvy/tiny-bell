@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 use crate::adapters::r#trait::AdapterError;
 use crate::adapters::railway::mapper::{build_project, deployment_from_node};
 use crate::adapters::railway::types::{
-    DeploymentsData, GraphqlResponse, MeProjectsData,
+    DeploymentConnection, GraphqlResponse, MeProjectsData,
 };
 use crate::adapters::{Deployment, Project};
 
@@ -17,11 +19,6 @@ const PROJECTS_QUERY: &str = r#"query Projects {
           node {
             id
             name
-            services {
-              edges {
-                node { id name }
-              }
-            }
           }
         }
       }
@@ -29,19 +26,16 @@ const PROJECTS_QUERY: &str = r#"query Projects {
   }
 }"#;
 
-const DEPLOYMENTS_QUERY: &str = r#"query Deployments($serviceId: String!, $first: Int!) {
-  deployments(first: $first, input: { serviceId: $serviceId }) {
-    edges {
-      node {
-        id
-        status
-        createdAt
-        updatedAt
-        url
-        staticUrl
-        meta
-      }
-    }
+const BATCH_DEPLOYMENT_FIELDS: &str = r#"edges {
+  node {
+    id
+    status
+    createdAt
+    updatedAt
+    url
+    staticUrl
+    meta
+    service { id name }
   }
 }"#;
 
@@ -109,42 +103,66 @@ pub async fn fetch_projects(
             }
         }
         for pe in ws.projects.edges {
-            let project_name = pe.node.name;
-            for se in pe.node.services.edges {
-                out.push(build_project(
-                    &se.node.id,
-                    &project_name,
-                    &se.node.name,
-                    account_id,
-                ));
-            }
+            out.push(build_project(&pe.node.id, &pe.node.name, account_id));
         }
     }
     Ok(out)
 }
 
-pub async fn fetch_deployments(
+pub async fn fetch_recent_deployments(
     http: &reqwest::Client,
     url: &str,
     token: &str,
-    service_id: &str,
-    limit: usize,
+    project_ids: &[String],
+    per_project_limit: usize,
 ) -> Result<Vec<Deployment>, AdapterError> {
-    let data: DeploymentsData = graphql(
-        http,
-        url,
-        token,
-        DEPLOYMENTS_QUERY,
-        serde_json::json!({ "serviceId": service_id, "first": limit }),
-    )
-    .await?;
+    if project_ids.is_empty() {
+        return Ok(Vec::new());
+    }
 
-    Ok(data
-        .deployments
-        .edges
-        .into_iter()
-        .map(|e| deployment_from_node(e.node, service_id))
-        .collect())
+    let mut query = String::from("query BatchDeployments {\n");
+    for (idx, pid) in project_ids.iter().enumerate() {
+        let escaped = pid.replace('\\', "\\\\").replace('"', "\\\"");
+        query.push_str(&format!(
+            "  p{idx}: deployments(first: {per_project_limit}, input: {{ projectId: \"{escaped}\" }}) {{ {BATCH_DEPLOYMENT_FIELDS} }}\n"
+        ));
+    }
+    query.push('}');
+
+    let data: HashMap<String, Option<DeploymentConnection>> =
+        graphql(http, url, token, &query, serde_json::json!({})).await?;
+
+    let mut out = Vec::new();
+    for (idx, pid) in project_ids.iter().enumerate() {
+        let alias = format!("p{idx}");
+        if let Some(Some(conn)) = data.get(&alias) {
+            for edge in &conn.edges {
+                out.push(deployment_from_node(clone_deployment_node(&edge.node), pid));
+            }
+        }
+    }
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(out)
+}
+
+fn clone_deployment_node(
+    node: &crate::adapters::railway::types::DeploymentNode,
+) -> crate::adapters::railway::types::DeploymentNode {
+    crate::adapters::railway::types::DeploymentNode {
+        id: node.id.clone(),
+        status: node.status.clone(),
+        created_at: node.created_at.clone(),
+        updated_at: node.updated_at.clone(),
+        url: node.url.clone(),
+        static_url: node.static_url.clone(),
+        meta: node.meta.clone(),
+        service: node.service.as_ref().map(|s| {
+            crate::adapters::railway::types::DeploymentServiceRef {
+                id: s.id.clone(),
+                name: s.name.clone(),
+            }
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -167,18 +185,8 @@ mod tests {
                                 "name": "personal",
                                 "projects": {
                                     "edges": [
-                                        {
-                                            "node": {
-                                                "id": "prj_1",
-                                                "name": "api",
-                                                "services": {
-                                                    "edges": [
-                                                        { "node": { "id": "svc_1", "name": "web" } },
-                                                        { "node": { "id": "svc_2", "name": "worker" } }
-                                                    ]
-                                                }
-                                            }
-                                        }
+                                        { "node": { "id": "prj_1", "name": "api" } },
+                                        { "node": { "id": "prj_2", "name": "worker" } }
                                     ]
                                 }
                             }
@@ -193,18 +201,19 @@ mod tests {
         let http = reqwest::Client::new();
         let projects = fetch_projects(&http, &url, "tok", None, "acc_1").await.unwrap();
         assert_eq!(projects.len(), 2);
-        assert_eq!(projects[0].name, "api/web");
-        assert_eq!(projects[1].name, "api/worker");
+        assert_eq!(projects[0].name, "api");
+        assert_eq!(projects[0].id, "prj_1");
+        assert_eq!(projects[1].name, "worker");
     }
 
     #[tokio::test]
-    async fn fetches_deployments() {
+    async fn fetches_recent_deployments_batch() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/graphql/v2"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "data": {
-                    "deployments": {
+                    "p0": {
                         "edges": [
                             {
                                 "node": {
@@ -219,7 +228,20 @@ mod tests {
                                         "commitHash": "abc1234",
                                         "commitAuthor": "rajat",
                                         "branch": "next"
-                                    }
+                                    },
+                                    "service": { "id": "svc_web", "name": "web" }
+                                }
+                            },
+                            {
+                                "node": {
+                                    "id": "dep_2",
+                                    "status": "BUILDING",
+                                    "createdAt": "2026-04-18T11:00:00Z",
+                                    "updatedAt": "2026-04-18T11:00:10Z",
+                                    "url": null,
+                                    "staticUrl": null,
+                                    "meta": {},
+                                    "service": { "id": "svc_worker", "name": "worker" }
                                 }
                             }
                         ]
@@ -231,12 +253,15 @@ mod tests {
 
         let url = format!("{}/graphql/v2", server.uri());
         let http = reqwest::Client::new();
-        let deps = fetch_deployments(&http, &url, "tok", "svc_1", 10).await.unwrap();
-        assert_eq!(deps.len(), 1);
-        assert_eq!(deps[0].id, "dep_1");
-        assert_eq!(deps[0].commit_message.as_deref(), Some("Fix build issues"));
-        assert_eq!(deps[0].branch.as_deref(), Some("next"));
-        assert!(deps[0].duration_ms.is_some());
+        let deps = fetch_recent_deployments(&http, &url, "tok", &["prj_1".into()], 50)
+            .await
+            .unwrap();
+        assert_eq!(deps.len(), 2);
+        assert_eq!(deps[0].id, "dep_2");
+        assert_eq!(deps[0].service_id.as_deref(), Some("svc_worker"));
+        assert_eq!(deps[0].service_name.as_deref(), Some("worker"));
+        assert_eq!(deps[1].id, "dep_1");
+        assert_eq!(deps[1].service_name.as_deref(), Some("web"));
     }
 
     #[tokio::test]

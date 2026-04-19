@@ -1,17 +1,25 @@
-import { type CSSProperties, useState } from "react"
-import { CheckCircle2 } from "lucide-react"
+import { useMemo, useState } from "react"
 
-import { Button } from "@/components/ui/button"
-import { ProviderDropdown } from "@/components/provider/provider-dropdown"
-import { ProviderLogo } from "@/components/provider/provider-logo"
+import { DRWindow } from "@/components/dr/window"
+import { DRButton } from "@/components/dr/button"
+import { Kbd } from "@/components/dr/kbd"
+import { StatusGlyph } from "@/components/dr/status-glyph"
+import { InitialsAvatar } from "@/components/dr/initials-avatar"
+import { ProviderMark } from "@/components/dr/provider-mark"
 import { AddAccountForm } from "@/components/account/add-account-form"
-import { GuideSteps, type GuideStep } from "../components/guide-steps"
-import { Topbar } from "../components/topbar"
-import type { DesktopRoute } from "../desktop-app"
-import type { AccountProfile, Platform } from "@/lib/accounts"
-import { PLATFORM_LABEL } from "@/lib/accounts"
-import { PROVIDER_THEMES, type ProviderTheme } from "@/lib/provider-theme"
+import { cn } from "@/lib/utils"
+import {
+  PLATFORM_LABEL,
+  type AccountProfile,
+  type Platform,
+} from "@/lib/accounts"
 import { windowApi } from "@/lib/deployments"
+import type { DesktopRoute } from "../desktop-app"
+
+type Step =
+  | { name: "welcome" }
+  | { name: "connect"; platform: Platform; remaining: Platform[] }
+  | { name: "success" }
 
 type Props = {
   hasAccounts: boolean
@@ -20,270 +28,244 @@ type Props = {
   onDone: () => void
 }
 
-const VERCEL_STEPS: GuideStep[] = [
-  {
-    title: "Click Connect with Vercel",
-    body: "Your browser opens Vercel's consent page. No password typing needed.",
-  },
-  {
-    title: "Approve Dev Radio",
-    body:
-      "Pick personal or team scope. Vercel redirects back to this app with a token.",
-  },
-  {
-    title: "You're live",
-    body:
-      "Your deployments start appearing in the menu bar within a few seconds.",
-  },
-]
-
-const RAILWAY_STEPS: GuideStep[] = [
-  {
-    title: "Create an API token",
-    body:
-      "Railway doesn't offer OAuth — you'll create a personal API token and paste it below.",
-  },
-  {
-    title: "Paste the token",
-    body:
-      "Tokens live only in your macOS Keychain and are never sent anywhere except Railway's API.",
-  },
-  {
-    title: "You're live",
-    body: "Your services appear in the menu bar within a few seconds.",
-  },
-]
-
-type Stage = "connect" | "success"
-
 export function OnboardingView({
   hasAccounts,
   onRouteChange,
   onConnected,
   onDone,
 }: Props) {
-  const [platform, setPlatform] = useState<Platform>("vercel")
-  const [stage, setStage] = useState<Stage>("connect")
-  const [latest, setLatest] = useState<AccountProfile | null>(null)
-
-  const theme = PROVIDER_THEMES[platform]
-  const steps = platform === "vercel" ? VERCEL_STEPS : RAILWAY_STEPS
+  const [step, setStep] = useState<Step>({ name: "welcome" })
+  const [connected, setConnected] = useState<AccountProfile[]>([])
 
   async function handleConnected(profile: AccountProfile) {
-    setLatest(profile)
-    setStage("success")
     await onConnected(profile)
+    const next = [...connected, profile]
+    setConnected(next)
+    if (step.name === "connect" && step.remaining.length > 0) {
+      const [first, ...rest] = step.remaining
+      setStep({ name: "connect", platform: first, remaining: rest })
+    } else {
+      setStep({ name: "success" })
+    }
+  }
+
+  function handleSkip() {
+    if (step.name !== "connect") return
+    if (step.remaining.length > 0) {
+      const [first, ...rest] = step.remaining
+      setStep({ name: "connect", platform: first, remaining: rest })
+    } else {
+      setStep({ name: "success" })
+    }
   }
 
   async function handleFinish() {
     const seen = await windowApi.hasSeenCloseHint()
-    if (!seen) {
-      await windowApi.markCloseHintSeen()
-    }
+    if (!seen) await windowApi.markCloseHintSeen()
     await windowApi.closeDesktop()
     onDone()
   }
 
-  function handleConnectAnother() {
-    setStage("connect")
-    setLatest(null)
-  }
-
-  const pageStyle: CSSProperties = {
-    backgroundColor: theme.heroBg,
-    backgroundImage: theme.backgroundImage,
-    color: theme.heroText,
-  }
-
-  const dropdownTriggerStyle: CSSProperties = {
-    backgroundColor: theme.inputBg,
-    borderColor: theme.cardBorder,
-    color: theme.heroText,
-  }
-
   return (
-    <div
-      className="flex h-screen flex-col overflow-hidden"
-      style={pageStyle}
+    <DRWindow
+      title="Dev Radio"
+      titleRight={
+        hasAccounts ? (
+          <DRButton
+            variant="ghost"
+            size="sm"
+            onClick={() => onRouteChange("settings")}
+          >
+            Settings
+          </DRButton>
+        ) : null
+      }
     >
-      <Topbar
-        route="onboarding"
-        hasAccounts={hasAccounts}
-        onRouteChange={onRouteChange}
-        tone="dark"
-        foreground={theme.heroText}
-        borderColor={theme.heroBorder}
-        right={
-          stage === "connect" ? (
-            <ProviderDropdown
-              platform={platform}
-              onChange={setPlatform}
-              size="sm"
-              triggerStyle={dropdownTriggerStyle}
-            />
-          ) : null
-        }
-      />
-
-      <div className="flex-1 overflow-y-auto">
-        {stage === "success" && latest ? (
-          <SuccessPanel
-            profile={latest}
-            theme={theme}
-            onAnother={handleConnectAnother}
+      <div className="flex min-h-0 flex-1 flex-col px-10 pt-10 pb-6">
+        {step.name === "welcome" ? (
+          <WelcomeStep
+            onPick={(picks) => {
+              const [first, ...rest] = picks
+              setStep({ name: "connect", platform: first, remaining: rest })
+            }}
+          />
+        ) : null}
+        {step.name === "connect" ? (
+          <ConnectStep
+            platform={step.platform}
+            onConnected={(p) => void handleConnected(p)}
+            onSkip={handleSkip}
+          />
+        ) : null}
+        {step.name === "success" ? (
+          <SuccessStep
+            connected={connected}
             onDone={() => void handleFinish()}
           />
-        ) : (
-          <ConnectPanel
-            platform={platform}
-            steps={steps}
-            onConnected={handleConnected}
-          />
-        )}
+        ) : null}
       </div>
-    </div>
+      <StepDots current={step.name} />
+    </DRWindow>
   )
 }
 
-type ConnectPanelProps = {
-  platform: Platform
-  steps: GuideStep[]
-  onConnected: (profile: AccountProfile) => void
+type WelcomeStepProps = {
+  onPick: (picks: Platform[]) => void
 }
 
-function ConnectPanel({ platform, steps, onConnected }: ConnectPanelProps) {
-  const theme = PROVIDER_THEMES[platform]
+function WelcomeStep({ onPick }: WelcomeStepProps) {
+  const [picks, setPicks] = useState<Platform[]>([])
 
-  const cardStyle: CSSProperties = {
-    backgroundColor: theme.cardBg,
-    borderColor: theme.cardBorder,
-    color: theme.cardText,
-    backdropFilter: "blur(8px)",
+  function toggle(p: Platform) {
+    setPicks((prev) =>
+      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p],
+    )
   }
-  const heroTextStyle: CSSProperties = { color: theme.heroText }
-  const mutedStyle: CSSProperties = { color: theme.cardMuted }
-  const badgeStyle: CSSProperties = {
-    backgroundColor: theme.badge,
-    color: theme.heroAccent,
-  }
+
+  const canContinue = picks.length > 0
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-8 py-10">
-      <div className="flex flex-col items-center gap-5 text-center">
-        <div
-          className="flex size-14 items-center justify-center rounded-2xl"
-          style={badgeStyle}
-        >
-          <ProviderLogo
-            platform={platform}
-            className="size-7"
-            color={theme.heroAccent}
-          />
-        </div>
-        <div className="space-y-2">
-          <div
-            className="text-xs font-medium uppercase tracking-widest"
-            style={mutedStyle}
-          >
-            {theme.label}
-          </div>
-          <h1
-            className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl"
-            style={heroTextStyle}
-          >
-            Connect your {theme.label} account
-          </h1>
-          <p className="max-w-lg text-sm" style={mutedStyle}>
-            {theme.tagline}
-          </p>
-        </div>
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 text-center">
+      <div className="flex flex-col gap-2">
+        <h1 className="font-display text-[24px] font-semibold tracking-tight text-foreground">
+          Welcome to Dev Radio
+        </h1>
+        <p className="text-[14px] text-muted-foreground">
+          Let's get you connected.
+        </p>
       </div>
-
-      <div className="grid gap-4 md:grid-cols-5">
-        <div
-          className="space-y-4 rounded-xl border p-5 md:col-span-2"
-          style={cardStyle}
-        >
-          <h2 className="text-sm font-medium" style={heroTextStyle}>
-            How it works
-          </h2>
-          <GuideSteps steps={steps} theme={theme} />
-        </div>
-
-        <div
-          className="space-y-4 rounded-xl border p-5 md:col-span-3"
-          style={cardStyle}
-        >
-          <h2 className="text-sm font-medium" style={heroTextStyle}>
-            Get started
-          </h2>
-          <AddAccountForm
-            platform={platform}
-            theme={theme}
-            layout="branded"
-            onConnected={onConnected}
-          />
-        </div>
+      <div className="grid w-full max-w-[440px] grid-cols-2 gap-3">
+        {(["vercel", "railway"] as const).map((p) => {
+          const active = picks.includes(p)
+          return (
+            <button
+              key={p}
+              type="button"
+              onClick={() => toggle(p)}
+              className={cn(
+                "flex flex-col items-center justify-center gap-2 rounded-[10px] border px-4 py-6 transition-colors",
+                active
+                  ? "border-foreground bg-surface-2"
+                  : "border-border hover:bg-hover",
+              )}
+            >
+              <ProviderMark platform={p} size={28} />
+              <span className="text-[13px] font-medium text-foreground">
+                {PLATFORM_LABEL[p]}
+              </span>
+            </button>
+          )
+        })}
       </div>
-
-      <p className="text-center text-xs" style={mutedStyle}>
-        Tokens are stored only in your macOS Keychain. Dev Radio never sends
-        them anywhere except {theme.label}'s API.
-      </p>
+      <DRButton
+        variant="primary"
+        size="md"
+        disabled={!canContinue}
+        onClick={() => canContinue && onPick(picks)}
+      >
+        Continue
+      </DRButton>
     </div>
   )
 }
 
-type SuccessPanelProps = {
-  profile: AccountProfile
-  theme: ProviderTheme
-  onAnother: () => void
+type ConnectStepProps = {
+  platform: Platform
+  onConnected: (profile: AccountProfile) => void
+  onSkip: () => void
+}
+
+function ConnectStep({ platform, onConnected, onSkip }: ConnectStepProps) {
+  return (
+    <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-[20px] font-semibold tracking-tight text-foreground">
+          Connect {PLATFORM_LABEL[platform]}
+        </h1>
+        <p className="text-[13px] text-muted-foreground">
+          {platform === "vercel"
+            ? "Approve Dev Radio in your browser or paste a personal access token."
+            : "Paste a Railway API token. It's stored only in your system keychain."}
+        </p>
+      </div>
+      <AddAccountForm platform={platform} onConnected={onConnected} />
+      <button
+        type="button"
+        onClick={onSkip}
+        className="self-start text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+      >
+        Skip for now
+      </button>
+    </div>
+  )
+}
+
+type SuccessStepProps = {
+  connected: AccountProfile[]
   onDone: () => void
 }
 
-function SuccessPanel({ profile, theme, onAnother, onDone }: SuccessPanelProps) {
-  const ctaStyle: CSSProperties = {
-    backgroundColor: theme.ctaBg,
-    color: theme.ctaText,
-  }
-  const outlineStyle: CSSProperties = {
-    backgroundColor: theme.cardBg,
-    borderColor: theme.cardBorder,
-    color: theme.heroText,
-  }
-  const mutedStyle: CSSProperties = { color: theme.cardMuted }
+function SuccessStep({ connected, onDone }: SuccessStepProps) {
+  const accounts = useMemo(
+    () =>
+      connected.length > 0
+        ? connected
+        : ([] as AccountProfile[]),
+    [connected],
+  )
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
-      <div
-        className="flex size-16 items-center justify-center rounded-full"
-        style={{ backgroundColor: "rgba(34,197,94,0.18)" }}
-      >
-        <CheckCircle2 className="size-9 text-green-400" />
-      </div>
-      <div className="space-y-1.5">
-        <h1 className="font-heading text-2xl font-semibold">
-          Connected as {profile.display_name}
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+      <StatusGlyph status="ready" size={40} />
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">
+          You're all set.
         </h1>
-        <p className="text-sm" style={mutedStyle}>
-          {PLATFORM_LABEL[profile.platform]} is now being monitored in the menu
-          bar.
+        <p className="text-[13px] text-muted-foreground">
+          Dev Radio lives in your menubar. Open it anytime with{" "}
+          <Kbd>⌥⌘D</Kbd>.
         </p>
       </div>
-      <div className="flex gap-2 pt-2">
-        <Button
-          variant="outline"
-          className="border"
-          style={outlineStyle}
-          onClick={onAnother}
-        >
-          Connect another
-        </Button>
-        <Button style={ctaStyle} onClick={onDone}>
-          Done
-        </Button>
-      </div>
+      {accounts.length > 0 ? (
+        <ul className="flex w-full max-w-[320px] flex-col gap-2 rounded-[8px] border border-border bg-surface-2 p-2">
+          {accounts.map((acc) => (
+            <li
+              key={acc.id}
+              className="flex items-center gap-2 rounded-[6px] px-2 py-1.5"
+            >
+              <InitialsAvatar name={acc.display_name} size={18} />
+              <span className="flex-1 truncate text-[12.5px] font-medium text-foreground">
+                {acc.display_name}
+              </span>
+              <ProviderMark
+                platform={acc.platform}
+                size={12}
+                className="text-muted-foreground"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <DRButton variant="primary" size="md" onClick={onDone}>
+        Open menubar
+      </DRButton>
     </div>
   )
 }
 
+function StepDots({ current }: { current: Step["name"] }) {
+  const ORDER: Step["name"][] = ["welcome", "connect", "success"]
+  return (
+    <div className="flex shrink-0 items-center justify-center gap-1.5 pb-5">
+      {ORDER.map((name) => (
+        <span
+          key={name}
+          className={cn(
+            "h-1 w-4 rounded-full transition-colors",
+            current === name ? "bg-foreground" : "bg-border",
+          )}
+        />
+      ))}
+    </div>
+  )
+}

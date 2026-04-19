@@ -12,6 +12,8 @@ export type DeploymentState =
 export type Deployment = {
   id: string
   project_id: string
+  service_id: string | null
+  service_name: string | null
   state: DeploymentState
   environment: string
   url: string | null
@@ -39,7 +41,7 @@ export type Project = {
 
 export type DashboardState = {
   projects: Project[]
-  deployments_by_project: Record<string, Deployment[]>
+  deployments: Deployment[]
   last_refreshed_at: number | null
   last_error: string | null
   offline: boolean
@@ -48,7 +50,7 @@ export type DashboardState = {
 
 export const emptyDashboard: DashboardState = {
   projects: [],
-  deployments_by_project: {},
+  deployments: [],
   last_refreshed_at: null,
   last_error: null,
   offline: false,

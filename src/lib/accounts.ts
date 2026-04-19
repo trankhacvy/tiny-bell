@@ -11,6 +11,8 @@ export type AccountProfile = {
   scope_id: string | null
 }
 
+export type AccountHealth = "ok" | "needs_reauth" | "revoked"
+
 export type AccountRecord = {
   id: string
   platform: Platform
@@ -18,6 +20,7 @@ export type AccountRecord = {
   scope_id: string | null
   enabled: boolean
   created_at: number
+  health: AccountHealth
 }
 
 export const accountsApi = {
@@ -52,6 +55,9 @@ export const accountsApi = {
       displayName,
     })
   },
+  validateToken(id: string) {
+    return trackedInvoke<AccountHealth>("validate_token", { accountId: id })
+  },
 }
 
 export function friendlyAuthError(raw: unknown): string {
@@ -74,6 +80,15 @@ export function friendlyAuthError(raw: unknown): string {
   }
   if (lower.startsWith("provider")) {
     const after = msg.slice(msg.indexOf(":") + 1).trim()
+    const afterLower = after.toLowerCase()
+    if (
+      afterLower.includes("not authorized") ||
+      afterLower.includes("not authenticated") ||
+      afterLower.includes("unauthorized") ||
+      afterLower.includes("invalid token")
+    ) {
+      return "Railway rejected this token. Create a new one at railway.com/account/tokens and pick “No workspace”."
+    }
     return after || msg
   }
   if (lower.startsWith("server")) {

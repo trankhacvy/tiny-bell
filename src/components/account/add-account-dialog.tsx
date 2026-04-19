@@ -7,7 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ProviderDropdown } from "@/components/provider/provider-dropdown"
+import { ProviderChip } from "@/components/dr/provider-chip"
+import { cn } from "@/lib/utils"
 import { AddAccountForm } from "./add-account-form"
 import type { AccountProfile, Platform } from "@/lib/accounts"
 
@@ -17,6 +18,8 @@ type Props = {
   onConnected: (profile: AccountProfile) => void
   initialPlatform?: Platform
 }
+
+const PLATFORMS: Platform[] = ["vercel", "railway"]
 
 export function AddAccountDialog({
   open,
@@ -46,20 +49,29 @@ export function AddAccountDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <DialogTitle>Connect an account</DialogTitle>
-              <DialogDescription>
-                Link a Vercel or Railway account to monitor deployments.
-              </DialogDescription>
-            </div>
-            <ProviderDropdown
-              platform={platform}
-              onChange={setPlatform}
-              size="sm"
-            />
-          </div>
+          <DialogTitle>Connect an account</DialogTitle>
+          <DialogDescription>
+            Link a Vercel or Railway account to monitor deployments.
+          </DialogDescription>
         </DialogHeader>
+
+        <div className="flex gap-2">
+          {PLATFORMS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPlatform(p)}
+              className={cn(
+                "flex-1 rounded-[6px] border px-3 py-2 text-left transition-colors",
+                platform === p
+                  ? "border-foreground bg-surface-2"
+                  : "border-border hover:bg-hover",
+              )}
+            >
+              <ProviderChip platform={p} size="md" />
+            </button>
+          ))}
+        </div>
 
         <AddAccountForm
           platform={platform}
