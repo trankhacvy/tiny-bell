@@ -59,13 +59,23 @@ export function StatusGlyph({ status, size = 16, className }: StatusGlyphProps) 
         className,
       )}
       style={{ width: size, height: size, background: g.color }}
-      data-animate={g.animate ? "pulse" : undefined}
       role="img"
       aria-label={g.label}
     >
+      {status === "building" && (
+        <span
+          className="absolute rounded-full"
+          style={{
+            inset: -3,
+            background: "var(--amber)",
+            opacity: 0.25,
+            animation: "dr-pulse 1.6s ease-out infinite",
+          }}
+        />
+      )}
       {g.fillDot ? (
         <span
-          className="block rounded-full bg-white"
+          className="relative block rounded-full bg-white"
           style={{ width: Math.round(size * 0.3), height: Math.round(size * 0.3) }}
         />
       ) : (

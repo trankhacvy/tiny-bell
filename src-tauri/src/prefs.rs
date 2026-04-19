@@ -17,6 +17,8 @@ pub struct Prefs {
     pub start_at_login: bool,
     pub global_shortcut: String,
     pub show_in_dock: bool,
+    pub notify_on_failure: bool,
+    pub notify_on_recovery: bool,
 }
 
 impl Default for Prefs {
@@ -28,6 +30,8 @@ impl Default for Prefs {
             start_at_login: false,
             global_shortcut: DEFAULT_SHORTCUT.into(),
             show_in_dock: true,
+            notify_on_failure: true,
+            notify_on_recovery: true,
         }
     }
 }
@@ -102,6 +106,8 @@ pub fn apply_bool<R: Runtime>(app: &AppHandle<R>, key: &str, value: bool) -> Res
         "hide_to_menubar_shown" => mutate(app, |p| p.hide_to_menubar_shown = value),
         "start_at_login" => mutate(app, |p| p.start_at_login = value),
         "show_in_dock" => mutate(app, |p| p.show_in_dock = value),
+        "notify_on_failure" => mutate(app, |p| p.notify_on_failure = value),
+        "notify_on_recovery" => mutate(app, |p| p.notify_on_recovery = value),
         other => Err(format!("unknown boolean pref: {other}")),
     }
 }

@@ -119,6 +119,8 @@ pub fn run() {
             window_cmds::set_autostart,
             ux_cmds::has_seen_close_hint,
             ux_cmds::mark_close_hint_seen,
+            #[cfg(debug_assertions)]
+            ux_cmds::dev_reset,
             prefs_cmds::get_prefs,
             prefs_cmds::set_pref,
             prefs_cmds::set_window_theme,

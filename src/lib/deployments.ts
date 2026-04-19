@@ -78,6 +78,12 @@ export const deploymentsApi = {
   },
 }
 
+export const devApi = {
+  reset() {
+    return trackedInvoke<void>("dev_reset")
+  },
+}
+
 export const windowApi = {
   openDesktop(view: "onboarding" | "settings" | "about") {
     return trackedInvoke<void>("open_desktop", { view })

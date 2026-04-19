@@ -1,12 +1,11 @@
 import { useState } from "react"
 
+import { DRBadge } from "@/components/dr/badge"
 import { DRButton } from "@/components/dr/button"
 import { Icon } from "@/components/dr/icon"
-import { InitialsAvatar } from "@/components/dr/initials-avatar"
 import { ProviderMark } from "@/components/dr/provider-mark"
 import { DRMenu, DRMenuItem, DRMenuSeparator } from "@/components/dr/menu"
 import { AddAccountDialog } from "@/components/account/add-account-dialog"
-import { cn } from "@/lib/utils"
 import {
   accountsApi,
   PLATFORM_LABEL,
@@ -50,19 +49,17 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="font-display text-[15px] font-semibold text-foreground">
-            Accounts
+      <header className="flex items-baseline justify-between">
+        <div>
+          <h2 className="text-[14px] font-semibold text-foreground" style={{ letterSpacing: -0.1 }}>
+            Connected accounts
           </h2>
-          <p className="text-[12px] text-muted-foreground">
-            {accounts.length === 0
-              ? "No accounts connected."
-              : `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"} connected.`}
+          <p className="mt-0.5 text-[12px] text-faint">
+            {accounts.length} account{accounts.length !== 1 ? "s" : ""} · polling every 30s
           </p>
         </div>
         <DRButton
-          variant="primary"
+          variant="secondary"
           size="sm"
           leading={<Icon name="plus" size={12} />}
           onClick={() => setDialogOpen(true)}
@@ -81,29 +78,25 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
       ) : null}
 
       {accounts.length > 0 ? (
-        <ul className="divide-y divide-border-subtle rounded-[8px] border border-border bg-surface">
+        <ul className="overflow-hidden rounded-[8px] border border-border bg-surface">
           {accounts.map((acc) => (
             <li
               key={acc.id}
-              className="flex items-center gap-3 px-3 py-2.5"
+              className="grid items-center gap-3 border-b border-border-subtle px-[14px] py-[11px] last:border-b-0"
+              style={{ gridTemplateColumns: "28px 1fr auto auto" }}
             >
-              <InitialsAvatar name={acc.display_name} size={24} />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="flex items-center gap-1.5 truncate text-[13px] font-medium text-foreground">
-                  <HealthDot health={acc.health} />
+              <span className="inline-flex size-7 items-center justify-center rounded-[6px] border border-border bg-surface-2">
+                <ProviderMark platform={acc.platform} size={14} />
+              </span>
+              <div className="min-w-0">
+                <span className="block truncate text-[12.5px] font-semibold text-foreground">
                   {acc.display_name}
                 </span>
-                <span className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
-                  <ProviderMark platform={acc.platform} size={10} />
+                <span className="block text-[11.5px] text-faint">
                   {PLATFORM_LABEL[acc.platform]}
-                  {acc.scope_id ? (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span className="truncate">{acc.scope_id}</span>
-                    </>
-                  ) : null}
                 </span>
               </div>
+              <HealthBadge health={acc.health} />
               <DRMenu
                 align="end"
                 trigger={
@@ -131,6 +124,30 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
         </ul>
       ) : null}
 
+      <p className="mt-[22px] mb-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+        Add another
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <DRButton
+          variant="secondary"
+          size="sm"
+          fullWidth
+          leading={<ProviderMark platform="vercel" size={13} />}
+          onClick={() => setDialogOpen(true)}
+        >
+          Vercel team
+        </DRButton>
+        <DRButton
+          variant="secondary"
+          size="sm"
+          fullWidth
+          leading={<ProviderMark platform="railway" size={13} />}
+          onClick={() => setDialogOpen(true)}
+        >
+          Railway account
+        </DRButton>
+      </div>
+
       <AddAccountDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -140,33 +157,28 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
   )
 }
 
-const HEALTH_COLOR: Record<AccountHealth, string> = {
-  ok: "var(--green)",
-  needs_reauth: "var(--amber)",
-  revoked: "var(--red)",
-}
-
-const HEALTH_LABEL: Record<AccountHealth, string> = {
-  ok: "Connected",
-  needs_reauth: "Needs re-authentication",
-  revoked: "Access revoked",
-}
-
-function HealthDot({ health }: { health: AccountHealth }) {
+function HealthBadge({ health }: { health: AccountHealth }) {
+  if (health === "ok") {
+    return (
+      <DRBadge tone="success">
+        <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--green)" }} />
+        Healthy
+      </DRBadge>
+    )
+  }
+  if (health === "needs_reauth") {
+    return (
+      <DRBadge tone="warning">
+        <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--amber)" }} />
+        Token expiring
+      </DRBadge>
+    )
+  }
   return (
-    <span
-      aria-label={HEALTH_LABEL[health]}
-      role="img"
-      className={cn(
-        "inline-block shrink-0 rounded-full",
-        health !== "ok" && "ring-2 ring-surface",
-      )}
-      style={{
-        width: 6,
-        height: 6,
-        background: HEALTH_COLOR[health],
-      }}
-    />
+    <DRBadge tone="danger">
+      <span className="size-[6px] shrink-0 rounded-full" style={{ background: "var(--red)" }} />
+      Re-auth
+    </DRBadge>
   )
 }
 

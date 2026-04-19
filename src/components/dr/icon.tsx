@@ -19,6 +19,8 @@ export type IconName =
   | "clock"
   | "search"
   | "filter"
+  | "power"
+  | "menubar"
 
 type IconProps = {
   name: IconName
@@ -48,6 +50,8 @@ const PATHS: Record<IconName, string> = {
   keyboard: "M3 5 H13 V11 H3 Z M5 7 V7.1 M7 7 V7.1 M9 7 V7.1 M11 7 V7.1 M5 9 H11",
   search: "M7 3 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8 M10 10 L13 13",
   filter: "M2 4 H14 L10 9 V13 L6 11 V9 Z",
+  power: "M8 3 V8 M5 5.5 A4 4 0 1 0 11 5.5",
+  menubar: "M1 2 H15 V5 H1 Z M1 7 H15 V14 H1 Z",
 }
 
 const NEEDS_FILL: Record<IconName, boolean> = {
@@ -69,6 +73,8 @@ const NEEDS_FILL: Record<IconName, boolean> = {
   keyboard: false,
   search: false,
   filter: false,
+  power: false,
+  menubar: false,
 }
 
 export function Icon({

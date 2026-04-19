@@ -1,43 +1,82 @@
-import type { KeyboardEvent } from "react"
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { StatusGlyph, statusLabel } from "@/components/dr/status-glyph"
-import { ProviderMark } from "@/components/dr/provider-mark"
+import { StatusGlyph } from "@/components/dr/status-glyph"
+import { InitialsAvatar } from "@/components/dr/initials-avatar"
+import { DRButton } from "@/components/dr/button"
+import { Icon } from "@/components/dr/icon"
+import { Kbd } from "@/components/dr/kbd"
 import { formatRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type {
-  Deployment,
-  DeploymentState,
-  Project,
-} from "@/lib/deployments"
+import type { Deployment, Project } from "@/lib/deployments"
 
 type DeployRowProps = {
   deployment: Deployment
   project: Project | null
+  focused?: boolean
 }
 
-export function DeployRow({ deployment, project }: DeployRowProps) {
+function stripProtocol(url: string): string {
+  return url.replace(/^https?:\/\//, "")
+}
+
+function EnvPill({ env }: { env: string }) {
+  const isProd = env === "production" || env === "prod"
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-[3px] border px-[5px] py-[1px] text-[10px] font-semibold uppercase tracking-[0.5px]",
+        isProd
+          ? "border-border bg-surface-2 text-foreground"
+          : "border-border bg-transparent text-faint",
+      )}
+    >
+      {isProd ? "prod" : env}
+    </span>
+  )
+}
+
+function DomainTag({ domain }: { domain: string }) {
+  return (
+    <span className="max-w-[140px] truncate font-mono-tabular text-[10.5px] text-faint">
+      {domain}
+    </span>
+  )
+}
+
+function ServiceBadge({ name }: { name: string }) {
+  const hue = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+  const bg = `oklch(0.93 0.035 ${hue})`
+  const fg = `oklch(0.38 0.12 ${hue})`
+  return (
+    <span
+      className="inline-flex max-w-[120px] shrink-0 items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-[3px] px-[6px] py-0 font-mono-tabular text-[10.5px] font-semibold"
+      style={{ height: 17, background: bg, color: fg }}
+    >
+      <span className="size-[5px] shrink-0 rounded-[1px]" style={{ background: fg }} />
+      {name}
+    </span>
+  )
+}
+
+export function DeployRow({ deployment, project, focused }: DeployRowProps) {
   const target = deployment.inspector_url ?? deployment.url
+  const commitMsg = deployment.commit_message?.split("\n")[0]?.trim() ?? null
+  const branch = deployment.branch ?? null
+  const author = deployment.author_name ?? null
+  const time = formatRelative(deployment.created_at)
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault()
-      if (target) void openUrl(target)
-    }
-  }
+  const isRailway = project?.platform === "railway"
 
-  const onClick = () => {
-    if (target) void openUrl(target)
-  }
-
-  const title =
-    deployment.commit_message?.split("\n")[0]?.trim() ||
-    deployment.branch ||
-    project?.name ||
-    "Deployment"
-
-  const projectLabel = project?.name ?? deployment.project_id
-  const sha = deployment.commit_sha?.slice(0, 7) ?? null
-  const ageLabel = formatRelative(deployment.created_at)
+  const meta = isRailway && deployment.service_name ? (
+    <>
+      <ServiceBadge name={deployment.service_name} />
+      <EnvPill env={deployment.environment} />
+    </>
+  ) : (
+    <>
+      <EnvPill env={deployment.environment} />
+      {project?.url ? <DomainTag domain={stripProtocol(project.url)} /> : null}
+    </>
+  )
 
   return (
     <div
@@ -45,69 +84,86 @@ export function DeployRow({ deployment, project }: DeployRowProps) {
       tabIndex={0}
       data-deploy-row
       data-deploy-id={deployment.id}
-      data-project-id={deployment.project_id}
-      onKeyDown={onKeyDown}
-      onClick={onClick}
+      onClick={() => target && void openUrl(target)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault()
+          if (target) void openUrl(target)
+        }
+        if (e.key === "Enter" && e.shiftKey) {
+          e.preventDefault()
+          if (deployment.inspector_url) void openUrl(deployment.inspector_url)
+        }
+      }}
       className={cn(
-        "flex items-center gap-3 px-4 outline-none transition-colors",
-        "hover:bg-hover focus-visible:bg-selected",
-        "h-14 border-b border-border-subtle last:border-b-0",
+        "relative cursor-default border-b border-border-subtle px-[14px] py-[9px] outline-none last:border-b-0",
+        focused ? "bg-hover" : "hover:bg-hover",
       )}
     >
-      <StatusGlyph status={deployment.state} size={16} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-foreground">
-            {title}
-          </span>
-        </span>
-        <span className="flex min-w-0 items-center gap-1 truncate text-[11px] text-muted-foreground">
-          {project ? (
-            <ProviderMark
-              platform={project.platform}
-              size={10}
-              className="shrink-0 text-muted-foreground"
-            />
-          ) : null}
-          <span className="truncate">{projectLabel}</span>
-          {deployment.service_name ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="truncate font-medium text-foreground/80">
-                {deployment.service_name}
-              </span>
-            </>
-          ) : null}
-          {sha ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="font-mono-tabular text-[10.5px]">{sha}</span>
-            </>
-          ) : null}
-          <span aria-hidden>·</span>
-          <span className="shrink-0">{ageLabel}</span>
-        </span>
-      </div>
-      <StatusLabel state={deployment.state} />
-    </div>
-  )
-}
+      {focused && (
+        <span className="absolute top-1 bottom-1 left-0 w-[2px] rounded-[1px] bg-foreground" />
+      )}
 
-function StatusLabel({ state }: { state: DeploymentState }) {
-  const color =
-    state === "error"
-      ? "var(--red)"
-      : state === "building" || state === "queued"
-        ? "var(--amber)"
-        : state === "ready"
-          ? "var(--green)"
-          : "var(--text-3)"
-  return (
-    <span
-      className="shrink-0 text-[11px] font-medium tabular-nums"
-      style={{ color }}
-    >
-      {statusLabel(state)}
-    </span>
+      <div className="flex min-w-0 items-center gap-[6px]">
+        <StatusGlyph status={deployment.state} size={12} />
+        <span
+          className="truncate text-[13px] font-semibold leading-none text-foreground"
+          style={{ letterSpacing: -0.1 }}
+        >
+          {project?.name ?? deployment.project_id}
+        </span>
+        {meta}
+        <span className="flex-1" />
+        <span className="shrink-0 font-mono-tabular text-[11px] text-faint">{time}</span>
+      </div>
+
+      <div className="mt-[3px] flex min-w-0 items-center gap-[6px]">
+        {author && <InitialsAvatar name={author} size={13} />}
+        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+          {commitMsg ?? branch ?? "—"}
+        </span>
+        {branch && (
+          <span className="max-w-[90px] shrink-0 truncate font-mono-tabular text-[10.5px] text-faint">
+            {branch}
+          </span>
+        )}
+      </div>
+
+      {focused && (
+        <div className="mt-[8px] flex items-center gap-[6px] pl-[22px]">
+          <DRButton
+            variant="secondary"
+            size="sm"
+            leading={<Icon name="external" size={11} />}
+            className="h-6 px-[9px] text-[11.5px]"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (target) void openUrl(target)
+            }}
+          >
+            Open site
+          </DRButton>
+          <DRButton
+            variant="ghost"
+            size="sm"
+            leading={<Icon name="external" size={11} />}
+            className="h-6 px-2 text-[11.5px]"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (deployment.inspector_url) void openUrl(deployment.inspector_url)
+            }}
+          >
+            Logs
+          </DRButton>
+          <span className="flex-1" />
+          <span className="flex items-center gap-1 text-[10.5px] text-faint">
+            <Kbd className="h-[14px] min-w-[14px] text-[9px]">↵</Kbd>
+            <span>open</span>
+            <Kbd className="ml-1 h-[14px] min-w-[14px] text-[9px]">⇧↵</Kbd>
+            <span>logs</span>
+          </span>
+        </div>
+      )}
+    </div>
   )
 }

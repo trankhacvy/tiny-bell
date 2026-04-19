@@ -1,15 +1,7 @@
 import { useState } from "react"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DRButton } from "@/components/dr/button"
-import { Kbd } from "@/components/dr/kbd"
 import { windowApi } from "@/lib/deployments"
 import { prefsApi } from "@/lib/prefs"
 
@@ -38,39 +30,83 @@ export function CloseHintDialog({ open, onOpenChange }: Props) {
     void windowApi.quit()
   }
 
+  if (!open) return null
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle className="font-display text-[15px] font-semibold">
-            Dev Radio keeps running
-          </DialogTitle>
-          <DialogDescription className="text-[12.5px]">
-            It lives in your menubar. Click the radio icon anytime, or press{" "}
-            <Kbd>⌥⌘D</Kbd>. To quit fully, right-click the menubar icon and
-            choose Quit.
-          </DialogDescription>
-        </DialogHeader>
-        <label className="flex items-center gap-2 text-[12.5px] text-foreground">
-          <Checkbox
-            checked={dontShow}
-            onCheckedChange={(v) => setDontShow(v === true)}
-          />
-          Don't show this again
-        </label>
-        <div className="mt-2 flex justify-end gap-2">
-          <DRButton variant="ghost" size="sm" onClick={handleQuit}>
-            Quit now
-          </DRButton>
-          <DRButton
-            variant="primary"
-            size="sm"
-            onClick={() => void handleClose()}
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/20" />
+
+      <div className="relative w-[380px] overflow-hidden rounded-[12px] border border-border bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+        <div className="p-[22px]">
+          <div
+            className="mb-[10px] inline-flex size-7 items-center justify-center rounded-[7px]"
+            style={{ background: "color-mix(in oklch, var(--accent-neutral) 15%, transparent)" }}
           >
-            Got it
-          </DRButton>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+              className="text-foreground"
+            >
+              <rect x="1" y="2" width="14" height="3" rx="1" />
+              <rect x="1" y="7" width="14" height="7" rx="1" />
+            </svg>
+          </div>
+
+          <h2
+            className="font-display text-[15px] font-semibold text-foreground"
+            style={{ letterSpacing: -0.2 }}
+          >
+            Dev Radio is still listening.
+          </h2>
+          <p className="mt-[6px] text-[12.5px] leading-[1.55] text-muted-foreground">
+            Closing this window doesn't quit the app — it just tucks back into
+            the menubar. Look for the{" "}
+            <span className="inline-flex items-center rounded-[4px] border border-border bg-surface-2 px-1 py-[1px] align-middle">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                className="text-foreground"
+              >
+                <rect x="1" y="2" width="14" height="3" rx="1" />
+                <rect x="1" y="7" width="14" height="7" rx="1" />
+              </svg>
+            </span>{" "}
+            icon near your clock.
+          </p>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <div className="flex items-center justify-between gap-[10px] border-t border-border-subtle bg-surface-2 px-[14px] py-[10px]">
+          <label className="flex cursor-pointer items-center gap-1.5 text-[11.5px] text-faint">
+            <Checkbox
+              checked={dontShow}
+              onCheckedChange={(v) => setDontShow(v === true)}
+            />
+            Don't show this again
+          </label>
+          <div className="flex gap-[6px]">
+            <DRButton variant="ghost" size="sm" onClick={handleQuit}>
+              Quit instead
+            </DRButton>
+            <DRButton
+              variant="primary"
+              size="sm"
+              onClick={() => void handleClose()}
+            >
+              Got it
+            </DRButton>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
