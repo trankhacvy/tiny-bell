@@ -45,6 +45,7 @@ export type DashboardState = {
   last_refreshed_at: number | null
   last_error: string | null
   offline: boolean
+  rate_limited: boolean
   polling: boolean
 }
 
@@ -54,6 +55,7 @@ export const emptyDashboard: DashboardState = {
   last_refreshed_at: null,
   last_error: null,
   offline: false,
+  rate_limited: false,
   polling: false,
 }
 

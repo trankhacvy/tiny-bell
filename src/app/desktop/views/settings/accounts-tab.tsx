@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { DRBadge } from "@/components/dr/badge"
 import { DRButton } from "@/components/dr/button"
@@ -20,7 +21,10 @@ import {
   type AccountHealth,
   type AccountProfile,
   type AccountRecord,
+  type Platform,
 } from "@/lib/accounts"
+import { formatInterval } from "@/lib/format"
+import { DEFAULT_PREFS, prefsApi, type Prefs } from "@/lib/prefs"
 
 type Props = {
   accounts: AccountRecord[]
@@ -29,9 +33,28 @@ type Props = {
 
 export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogPlatform, setDialogPlatform] = useState<Platform | undefined>(
+    undefined,
+  )
+  const [reauthTarget, setReauthTarget] = useState<AccountRecord | null>(null)
   const [repoSelectorAccountId, setRepoSelectorAccountId] = useState<
     string | null
   >(null)
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
+
+  useEffect(() => {
+    prefsApi
+      .get()
+      .then(setPrefs)
+      .catch(() => {})
+    let unlisten: UnlistenFn | undefined
+    listen<Prefs>("prefs:changed", (e) => setPrefs(e.payload)).then((fn) => {
+      unlisten = fn
+    })
+    return () => {
+      unlisten?.()
+    }
+  }, [])
 
   async function handleRemove(id: string) {
     await accountsApi.remove(id)
@@ -45,13 +68,43 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
     await onAccountsChange()
   }
 
-  async function handleVerify(id: string) {
-    await accountsApi.validateToken(id).catch(() => {})
+  function handleReconnect(account: AccountRecord) {
+    setReauthTarget(account)
+    setDialogPlatform(account.platform)
+    setDialogOpen(true)
+  }
+
+  function handleAddAccount() {
+    setReauthTarget(null)
+    setDialogPlatform(undefined)
+    setDialogOpen(true)
+  }
+
+  function handleAddAccountFor(platform: Platform) {
+    setReauthTarget(null)
+    setDialogPlatform(platform)
+    setDialogOpen(true)
+  }
+
+  async function handleConnected(_profile: AccountProfile) {
+    // If the user was reconnecting a broken account, retire the old record
+    // after the replacement successfully authenticates.
+    if (reauthTarget) {
+      try {
+        await accountsApi.remove(reauthTarget.id)
+      } catch {
+        /* non-fatal: user can still delete it manually */
+      }
+    }
+    setReauthTarget(null)
     await onAccountsChange()
   }
 
-  function handleConnected(_profile: AccountProfile) {
-    void onAccountsChange()
+  function handleDialogOpenChange(open: boolean) {
+    setDialogOpen(open)
+    if (!open) {
+      setReauthTarget(null)
+    }
   }
 
   const needsReauth = accounts.filter(
@@ -66,14 +119,15 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
             Connected accounts
           </h2>
           <p className="mt-0.5 text-[12px] text-faint">
-            {accounts.length} account{accounts.length !== 1 ? "s" : ""} · polling every 30s
+            {accounts.length} account{accounts.length !== 1 ? "s" : ""} · polling every{" "}
+            {formatInterval(prefs.refresh_interval_ms)}
           </p>
         </div>
         <DRButton
           variant="secondary"
           size="sm"
           leading={<Icon name="plus" size={12} />}
-          onClick={() => setDialogOpen(true)}
+          onClick={handleAddAccount}
         >
           Add account
         </DRButton>
@@ -82,9 +136,9 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
       {needsReauth.length > 0 ? (
         <ReauthBanner
           count={needsReauth.length}
-          onOpenFirst={() =>
-            needsReauth[0] ? void handleVerify(needsReauth[0].id) : null
-          }
+          onOpenFirst={() => {
+            if (needsReauth[0]) handleReconnect(needsReauth[0])
+          }}
         />
       ) : null}
 
@@ -120,6 +174,11 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
                   </button>
                 }
               >
+                {acc.health !== "ok" ? (
+                  <DRMenuItem onSelect={() => handleReconnect(acc)}>
+                    Re-connect…
+                  </DRMenuItem>
+                ) : null}
                 <DRMenuItem
                   onSelect={() => void handleRename(acc.id, acc.display_name)}
                 >
@@ -151,7 +210,7 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
           size="sm"
           fullWidth
           leading={<ProviderMark platform="vercel" size={13} />}
-          onClick={() => setDialogOpen(true)}
+          onClick={() => handleAddAccountFor("vercel")}
         >
           Vercel team
         </DRButton>
@@ -160,7 +219,7 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
           size="sm"
           fullWidth
           leading={<ProviderMark platform="railway" size={13} />}
-          onClick={() => setDialogOpen(true)}
+          onClick={() => handleAddAccountFor("railway")}
         >
           Railway account
         </DRButton>
@@ -168,8 +227,9 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
 
       <AddAccountDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onConnected={handleConnected}
+        initialPlatform={dialogPlatform}
       />
 
       <Dialog
@@ -259,7 +319,7 @@ function ReauthBanner({
         </span>
       </div>
       <DRButton variant="secondary" size="sm" onClick={onOpenFirst}>
-        Re-verify
+        Re-connect
       </DRButton>
     </div>
   )

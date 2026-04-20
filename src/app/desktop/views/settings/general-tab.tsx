@@ -46,12 +46,16 @@ export function SettingsGeneral() {
   }, [])
 
   async function update<K extends keyof Prefs>(key: K, value: Prefs[K]) {
-    try {
-      const next = await prefsApi.set(key, value)
-      setPrefs(next)
-    } catch {
-      /* swallow */
-    }
+    const next = await prefsApi.set(key, value)
+    setPrefs(next)
+  }
+
+  // Best-effort wrapper for non-critical toggles whose failure doesn't need UI.
+  // (Shortcut recorder has its own error handling and uses `update` directly.)
+  function updateOrSwallow<K extends keyof Prefs>(key: K, value: Prefs[K]) {
+    update(key, value).catch(() => {
+      /* swallow — shown only via logs */
+    })
   }
 
   return (
@@ -67,7 +71,7 @@ export function SettingsGeneral() {
             <Segmented
               options={INTERVAL_OPTIONS.map((o) => ({ label: o.label, value: o.ms }))}
               value={prefs.refresh_interval_ms}
-              onChange={(v) => void update("refresh_interval_ms", v)}
+              onChange={(v) => void updateOrSwallow("refresh_interval_ms", v)}
             />
           }
         />
@@ -77,7 +81,7 @@ export function SettingsGeneral() {
           control={
             <Switch
               checked={prefs.notify_on_failure}
-              onChange={(v) => void update("notify_on_failure", v)}
+              onChange={(v) => void updateOrSwallow("notify_on_failure", v)}
             />
           }
         />
@@ -87,7 +91,7 @@ export function SettingsGeneral() {
           control={
             <Switch
               checked={prefs.notify_on_recovery}
-              onChange={(v) => void update("notify_on_recovery", v)}
+              onChange={(v) => void updateOrSwallow("notify_on_recovery", v)}
             />
           }
           last
@@ -104,7 +108,7 @@ export function SettingsGeneral() {
           control={
             <Switch
               checked={prefs.start_at_login}
-              onChange={(v) => void update("start_at_login", v)}
+              onChange={(v) => void updateOrSwallow("start_at_login", v)}
             />
           }
         />
@@ -114,7 +118,7 @@ export function SettingsGeneral() {
           control={
             <Switch
               checked={prefs.show_in_dock}
-              onChange={(v) => void update("show_in_dock", v)}
+              onChange={(v) => void updateOrSwallow("show_in_dock", v)}
             />
           }
         />
@@ -124,7 +128,7 @@ export function SettingsGeneral() {
             <Segmented
               options={THEME_OPTIONS}
               value={prefs.theme}
-              onChange={(v) => void update("theme", v)}
+              onChange={(v) => void updateOrSwallow("theme", v)}
             />
           }
           last
@@ -141,7 +145,7 @@ export function SettingsGeneral() {
           control={
             <ShortcutRecorder
               accelerator={prefs.global_shortcut}
-              onChange={(v) => void update("global_shortcut", v)}
+              onChange={(v) => update("global_shortcut", v)}
             />
           }
           last
@@ -263,7 +267,7 @@ function Switch({ checked, onChange }: SwitchProps) {
 
 type ShortcutRecorderProps = {
   accelerator: string
-  onChange: (next: string) => void
+  onChange: (next: string) => Promise<void>
 }
 
 const RESERVED = new Set([
@@ -273,15 +277,44 @@ const RESERVED = new Set([
   "Command+Tab",
 ])
 
+function friendlyShortcutError(raw: unknown): string {
+  const msg = raw instanceof Error ? raw.message : String(raw ?? "")
+  const lower = msg.toLowerCase()
+  if (lower.includes("hotkey") || lower.includes("registered")) {
+    return "That combo is already taken by another app."
+  }
+  if (lower.includes("invalid shortcut")) {
+    return "That key combination isn't supported."
+  }
+  return msg || "Could not register that shortcut."
+}
+
 function ShortcutRecorder({ accelerator, onChange }: ShortcutRecorderProps) {
   const [recording, setRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
 
   const parts = accelerator
     .split("+")
     .map((p) => p.trim())
     .filter(Boolean)
+
+  async function commit(next: string) {
+    setSaving(true)
+    try {
+      await onChange(next)
+      setError(null)
+      setRecording(false)
+    } catch (e) {
+      // The Rust side rolls the pref back to the previous value, so the
+      // parent's `accelerator` prop stays on the old combo.
+      setError(friendlyShortcutError(e))
+      setRecording(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (!recording) return
@@ -314,9 +347,7 @@ function ShortcutRecorder({ accelerator, onChange }: ShortcutRecorderProps) {
       return
     }
 
-    setError(null)
-    setRecording(false)
-    onChange(next)
+    void commit(next)
   }
 
   return (
@@ -324,6 +355,7 @@ function ShortcutRecorder({ accelerator, onChange }: ShortcutRecorderProps) {
       <button
         ref={buttonRef}
         type="button"
+        disabled={saving}
         onClick={() => {
           setRecording(true)
           setError(null)
@@ -336,12 +368,15 @@ function ShortcutRecorder({ accelerator, onChange }: ShortcutRecorderProps) {
           recording
             ? "border-foreground/60 bg-surface-2"
             : "border-border bg-surface hover:bg-hover",
+          saving && "opacity-60",
         )}
       >
         {recording ? (
           <span className="text-[11px] text-muted-foreground">
             Press a combo…
           </span>
+        ) : saving ? (
+          <span className="text-[11px] text-muted-foreground">Saving…</span>
         ) : (
           parts.map((p, i) => <Kbd key={`${p}-${i}`}>{prettyKey(p)}</Kbd>)
         )}

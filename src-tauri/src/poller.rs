@@ -323,15 +323,21 @@ impl<R: Runtime> Poller<R> {
 
         state.deployments.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-        if !new_cooldowns.is_empty() {
+        let rate_limited = {
+            let now = Instant::now();
             let mut guard = self
                 .cooldowns
                 .lock()
                 .unwrap_or_else(|p| p.into_inner());
+            // Fold in newly-rate-limited accounts from this cycle.
             for (aid, until) in new_cooldowns {
                 guard.insert(aid, until);
             }
-        }
+            // Drop any expired cooldowns so the map doesn't grow forever.
+            guard.retain(|_, until| *until > now);
+            !guard.is_empty()
+        };
+        state.rate_limited = rate_limited;
 
         let mut any_health_changed = false;
         for (account_id, signal) in health_updates {

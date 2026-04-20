@@ -12,6 +12,7 @@ pub struct DashboardState {
     pub last_refreshed_at: Option<i64>,
     pub last_error: Option<String>,
     pub offline: bool,
+    pub rate_limited: bool,
     pub polling: bool,
 }
 

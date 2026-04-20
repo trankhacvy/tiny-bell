@@ -19,6 +19,7 @@ import {
 import { useDashboard } from "@/hooks/use-dashboard"
 import { useScope } from "@/hooks/use-scope"
 import { DEFAULT_PREFS, prefsApi, type Prefs } from "@/lib/prefs"
+import { formatInterval } from "@/lib/format"
 import { PopoverHeader } from "@/components/popover/popover-header"
 import { PopoverFooter } from "@/components/popover/popover-footer"
 import { FilterBar } from "@/components/popover/filter-bar"
@@ -29,11 +30,7 @@ import { PopoverLoading } from "@/components/popover/states/loading"
 import { PopoverEmpty } from "@/components/popover/states/empty"
 import { PopoverNoAccounts } from "@/components/popover/states/no-accounts"
 import { OfflineBanner } from "@/components/popover/states/offline-banner"
-
-function msToLabel(ms: number): string {
-  if (ms < 60_000) return `${ms / 1000}s`
-  return `${ms / 60_000}m`
-}
+import { RateLimitBanner } from "@/components/popover/states/rate-limit"
 
 export function PopoverApp() {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
@@ -200,7 +197,7 @@ export function PopoverApp() {
 
   const hasAccounts = accounts.length > 0
   const hasAnyScopedProjects = scopedProjects.length > 0
-  const intervalLabel = msToLabel(prefs.refresh_interval_ms)
+  const intervalLabel = formatInterval(prefs.refresh_interval_ms)
 
   return (
     <div
@@ -233,6 +230,7 @@ export function PopoverApp() {
             {state.offline && (
               <OfflineBanner lastRefreshedAt={state.last_refreshed_at} />
             )}
+            {!state.offline && state.rate_limited && <RateLimitBanner />}
             <div className={state.offline ? "pointer-events-none opacity-65" : undefined}>
               {!hasAnyScopedProjects || filteredDeployments.length === 0 ? (
                 <PopoverEmpty />

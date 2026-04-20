@@ -21,6 +21,12 @@ export function formatRelative(ms: number, now: number = Date.now()): string {
   return `${Math.round(diff / YEAR)} years ago`
 }
 
+export function formatInterval(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`
+  const minutes = ms / 60_000
+  return Number.isInteger(minutes) ? `${minutes}m` : `${minutes.toFixed(1)}m`
+}
+
 export function formatDuration(ms: number | null): string {
   if (ms == null || ms <= 0) return ""
   if (ms < 1000) return `${ms}ms`
