@@ -118,7 +118,13 @@ export function DeployRow({ deployment, project, focused }: DeployRowProps) {
       </div>
 
       <div className="mt-[3px] flex min-w-0 items-center gap-[6px]">
-        {author && <InitialsAvatar name={author} size={13} />}
+        {author && (
+          <InitialsAvatar
+            name={author}
+            src={deployment.author_avatar}
+            size={13}
+          />
+        )}
         <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
           {commitMsg ?? branch ?? "—"}
         </span>

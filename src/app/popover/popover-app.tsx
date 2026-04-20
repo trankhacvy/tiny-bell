@@ -37,7 +37,8 @@ export function PopoverApp() {
   const [accountsLoading, setAccountsLoading] = useState(true)
   const { state, loading: dashLoading } = useDashboard()
   const [scope, setScope] = useScope()
-  const [selectedProjectIds, setSelectedProjectIds] = useState<ProjectSelection>(null)
+  const [selectedProjectIds, setSelectedProjectIds] =
+    useState<ProjectSelection>(null)
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [isChecking, setIsChecking] = useState(false)
@@ -66,7 +67,10 @@ export function PopoverApp() {
   useEffect(() => {
     void reloadAccounts()
     void deploymentsApi.hydrateAdapters()
-    prefsApi.get().then(setPrefs).catch(() => {})
+    prefsApi
+      .get()
+      .then(setPrefs)
+      .catch(() => {})
   }, [reloadAccounts])
 
   useEffect(() => {
@@ -93,7 +97,7 @@ export function PopoverApp() {
 
   const scopedProjects = useMemo<Project[]>(
     () => state.projects.filter((p) => scopedAccountIds.has(p.account_id)),
-    [state.projects, scopedAccountIds],
+    [state.projects, scopedAccountIds]
   )
 
   const projectsById = useMemo(() => {
@@ -115,12 +119,12 @@ export function PopoverApp() {
 
   const scopedProjectIds = useMemo(
     () => new Set(scopedProjects.map((p) => p.id)),
-    [scopedProjects],
+    [scopedProjects]
   )
 
   const scopedDeployments = useMemo<Deployment[]>(
     () => state.deployments.filter((d) => scopedProjectIds.has(d.project_id)),
-    [state.deployments, scopedProjectIds],
+    [state.deployments, scopedProjectIds]
   )
 
   const filteredDeployments = useMemo<Deployment[]>(() => {
@@ -190,7 +194,10 @@ export function PopoverApp() {
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault()
-      const nextId = moveFocus(listRef.current, event.key === "ArrowDown" ? 1 : -1)
+      const nextId = moveFocus(
+        listRef.current,
+        event.key === "ArrowDown" ? 1 : -1
+      )
       if (nextId) setFocusedId(nextId)
     }
   }
@@ -205,7 +212,10 @@ export function PopoverApp() {
       tabIndex={-1}
       onKeyDown={onRootKeyDown}
     >
-      <PopoverHeader deployments={filteredDeployments} onRefresh={handleRefresh} />
+      <PopoverHeader
+        deployments={filteredDeployments}
+        onRefresh={handleRefresh}
+      />
       {hasAccounts && (
         <FilterBar
           accounts={accounts}
@@ -231,9 +241,17 @@ export function PopoverApp() {
               <OfflineBanner lastRefreshedAt={state.last_refreshed_at} />
             )}
             {!state.offline && state.rate_limited && <RateLimitBanner />}
-            <div className={state.offline ? "pointer-events-none opacity-65" : undefined}>
+            <div
+              className={
+                state.offline ? "pointer-events-none opacity-65" : undefined
+              }
+            >
               {!hasAnyScopedProjects || filteredDeployments.length === 0 ? (
-                <PopoverEmpty />
+                <PopoverEmpty
+                  dormantGitHubRepos={
+                    scopedProjects.filter((p) => p.platform === "github").length
+                  }
+                />
               ) : (
                 groups.map(({ account, deployments }) => (
                   <section key={account!.id}>
@@ -270,7 +288,7 @@ export function PopoverApp() {
 function moveFocus(root: HTMLElement | null, delta: number): string | null {
   if (!root) return null
   const rows = Array.from(
-    root.querySelectorAll<HTMLElement>("[data-deploy-row]"),
+    root.querySelectorAll<HTMLElement>("[data-deploy-row]")
   )
   if (rows.length === 0) return null
   const active = document.activeElement as HTMLElement | null

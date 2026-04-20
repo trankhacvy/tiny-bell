@@ -1,7 +1,12 @@
+import { useEffect, useState } from "react"
+
 import { cn } from "@/lib/utils"
 
 type InitialsAvatarProps = {
   name: string
+  /** Optional image URL. When set, renders an <img>; falls back to initials
+   *  on load error or when missing. */
+  src?: string | null
   size?: number
   className?: string
 }
@@ -37,9 +42,37 @@ function hashName(name: string): number {
 
 export function InitialsAvatar({
   name,
+  src,
   size = 22,
   className,
 }: InitialsAvatarProps) {
+  const [failed, setFailed] = useState(false)
+  // Reset the failed flag whenever a new URL comes in (e.g. when the
+  // component is reused for a different row).
+  useEffect(() => {
+    setFailed(false)
+  }, [src])
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className={cn(
+          "inline-block shrink-0 rounded-full bg-surface-2 object-cover",
+          className,
+        )}
+        style={{ width: size, height: size }}
+      />
+    )
+  }
+
   const initials = getInitials(name)
   const color = PALETTE[hashName(name) % PALETTE.length]
   const fontSize = Math.max(9, Math.round(size * 0.42))
@@ -57,7 +90,8 @@ export function InitialsAvatar({
         lineHeight: 1,
         letterSpacing: 0,
       }}
-      aria-hidden
+      aria-label={name}
+      role="img"
     >
       {initials}
     </span>

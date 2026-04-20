@@ -40,11 +40,13 @@ const TOKEN_LINKS: Record<Platform, TokenLink> = {
     hint: "Select 'No workspace' to create an account token.",
   },
   github: {
-    href: "https://github.com/settings/tokens",
-    label: "github.com/settings/tokens",
+    // Fine-grained tokens page. Settings → Developer settings →
+    // Personal access tokens → Fine-grained tokens.
+    href: "https://github.com/settings/personal-access-tokens/new",
+    label: "github.com/settings/personal-access-tokens",
     scopeLabel: null,
-    placeholder: "ghp_… or github_pat_…",
-    hint: "Classic: select 'repo' and 'read:user' scopes.",
+    placeholder: "github_pat_… or ghp_…",
+    hint: "Fine-grained (recommended): Repository permissions → Actions = Read-only, Metadata = Read-only. Classic also works with 'repo' scope (broader access).",
   },
 }
 
@@ -75,7 +77,11 @@ export function AddAccountForm({
   const link = TOKEN_LINKS[platform]
 
   useEffect(() => {
-    setMode("oauth")
+    // GitHub classic OAuth requires the broad `repo` scope (read+write on
+    // every public and private repo the user can see) because GitHub
+    // doesn't expose a read-only Actions scope to OAuth Apps. Default to
+    // the paste-token path, which supports a minimal fine-grained PAT.
+    setMode(platform === "github" ? "pat" : "oauth")
     setToken("")
     setScope("")
     setError(null)
@@ -171,6 +177,22 @@ export function AddAccountForm({
             Opens your browser to approve Tiny Bell. The token is stored only
             in your system keychain.
           </p>
+          {platform === "github" ? (
+            <p className="rounded-[6px] border border-border bg-surface-2 px-2.5 py-2 text-[11.5px] leading-[1.45] text-muted-foreground">
+              <strong className="font-semibold text-foreground">Heads up:</strong>{" "}
+              GitHub classic OAuth Apps can't request read-only Actions access —
+              the consent screen will ask for the broad <code className="font-mono-tabular">repo</code>{" "}
+              scope. For a narrower, read-only connection, switch to{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => setMode("pat")}
+              >
+                Paste token
+              </button>{" "}
+              and use a fine-grained PAT.
+            </p>
+          ) : null}
           <DRButton
             variant="primary"
             size="md"

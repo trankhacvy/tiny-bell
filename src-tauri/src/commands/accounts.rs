@@ -46,6 +46,11 @@ async fn rehydrate_after_change(app: &AppHandle) {
         }
         if !accounts.is_empty() {
             crate::poller::ensure_started(app);
+            // Any config change (new account, removed account, toggled
+            // enabled flag, edited GitHub monitored_repos, etc.) can make
+            // the poller's cached project lists stale. Drop them so the
+            // next poll calls list_projects on the rebuilt adapters.
+            crate::poller::invalidate_projects(app);
             crate::poller::force_refresh(app);
         }
     }

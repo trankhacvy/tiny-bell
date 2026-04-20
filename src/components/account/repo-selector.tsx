@@ -6,6 +6,7 @@ import {
   accountsApiGitHub,
   type GitHubRepoInfo,
 } from "@/lib/accounts"
+import { cn } from "@/lib/utils"
 
 type Props = {
   accountId: string
@@ -52,6 +53,48 @@ export function RepoSelector({ accountId, initialRepos, onSave }: Props) {
     r.full_name.toLowerCase().includes(search.toLowerCase()),
   )
 
+  // Bulk-select state. Two "done" cases for the toggle:
+  //   1. Every visible (filtered) repo is already in the selection.
+  //   2. We've hit the 30-repo cap.
+  // Either one flips the button to Deselect. Hitting the cap is also the
+  // one-click escape hatch — clicking Deselect clears the *whole* selection
+  // so users can start over instead of un-ticking one at a time.
+  const capReached = selected.size >= 30
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((r) => selected.has(r.full_name))
+
+  function toggleAll() {
+    setSelected((prev) => {
+      if (capReached) {
+        // Cap reached → single-click clear. Works whether or not the
+        // filter covers all 30; either way, the user wants to reset.
+        return new Set()
+      }
+      const next = new Set(prev)
+      if (allFilteredSelected) {
+        for (const r of filtered) next.delete(r.full_name)
+        return next
+      }
+      for (const r of filtered) {
+        if (next.size >= 30) break
+        next.add(r.full_name)
+      }
+      return next
+    })
+  }
+
+  // Truth-in-labeling:
+  // - "Select first 30" when the full list doesn't fit.
+  // - "Select all" / "Select filtered (N)" when it does.
+  // - "Deselect all" once we're at the cap or everything visible is picked.
+  const toggleLabel = (() => {
+    if (capReached) return "Deselect all"
+    if (allFilteredSelected) return search ? "Deselect filtered" : "Deselect all"
+    if (search) return `Select filtered (${Math.min(filtered.length, 30)})`
+    if (filtered.length > 30) return "Select first 30"
+    return "Select all"
+  })()
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -75,13 +118,31 @@ export function RepoSelector({ accountId, initialRepos, onSave }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-[12px] font-medium text-foreground">
           Select repositories to monitor
         </span>
-        <span className="text-[11px] text-muted-foreground">
-          {selected.size}/30
-        </span>
+        <div className="flex items-center gap-2">
+          {filtered.length > 0 ? (
+            <button
+              type="button"
+              onClick={toggleAll}
+              className={cn(
+                "rounded-[4px] border border-border bg-surface-2 px-2 py-[3px] text-[10.5px] font-medium text-foreground transition-colors hover:bg-hover",
+              )}
+            >
+              {toggleLabel}
+            </button>
+          ) : null}
+          <span
+            className={cn(
+              "font-mono-tabular text-[11px]",
+              capReached ? "text-warning" : "text-muted-foreground",
+            )}
+          >
+            {selected.size}/30
+          </span>
+        </div>
       </div>
 
       <DRInput

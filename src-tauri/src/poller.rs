@@ -113,6 +113,17 @@ impl<R: Runtime> Poller<R> {
         guard.get(account_id).cloned()
     }
 
+    fn invalidate_projects_cache(&self) {
+        self.projects_last_fetched
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
+        self.projects_cache
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clear();
+    }
+
     fn store_projects(&self, account_id: &str, projects: Vec<crate::adapters::Project>) {
         {
             let mut guard = self
@@ -457,6 +468,16 @@ pub fn ensure_started<R: Runtime>(app: &AppHandle<R>) {
 pub fn force_refresh<R: Runtime>(app: &AppHandle<R>) {
     if let Some(p) = app.try_state::<Arc<Poller<R>>>() {
         p.inner().force_refresh();
+    }
+}
+
+/// Drop every cached project list. Called whenever the adapter registry is
+/// rebuilt (account added/removed/enabled/disabled, GitHub monitored_repos
+/// edited, etc.) so the next `poll_once` calls `list_projects` on the fresh
+/// adapter instead of reusing a snapshot that might not match the new config.
+pub fn invalidate_projects<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(p) = app.try_state::<Arc<Poller<R>>>() {
+        p.inner().invalidate_projects_cache();
     }
 }
 

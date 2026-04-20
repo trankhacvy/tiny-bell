@@ -250,7 +250,8 @@ const SEED_DEPLOYMENTS: Deployment[] = [
     commit_sha: "ab12cd3",
     commit_message: "test: add regression for #221",
     author_name: "maya",
-    author_avatar: null,
+    // Octocat avatar — exercises the <img> branch in the sandbox.
+    author_avatar: "https://avatars.githubusercontent.com/u/583231?v=4",
     created_at: ago(11 * 60 * 1000),
     finished_at: ago(9 * 60 * 1000),
     duration_ms: 120_000,
