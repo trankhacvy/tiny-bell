@@ -1,24 +1,19 @@
-import vercelSvg from "@/assets/providers/vercel.svg?raw"
-import railwaySvg from "@/assets/providers/railway.svg?raw"
-import githubSvg from "@/assets/providers/github.svg?raw"
+import {
+  siGithub,
+  siRailway,
+  siVercel,
+  type SimpleIcon,
+} from "simple-icons"
+
 import type { Platform } from "@/lib/accounts"
 
-const RAW: Record<Platform, string> = {
-  vercel: vercelSvg,
-  railway: railwaySvg,
-  github: githubSvg,
-}
-
-function currentColorize(svg: string): string {
-  return svg
-    .replace(/\sfill="(?!none)[^"]*"/g, ' fill="currentColor"')
-    .replace(/\sstroke="(?!none)[^"]*"/g, ' stroke="currentColor"')
-}
-
-const PROCESSED: Record<Platform, string> = {
-  vercel: currentColorize(RAW.vercel),
-  railway: currentColorize(RAW.railway),
-  github: currentColorize(RAW.github),
+// simple-icons publishes canonical 24×24 monochrome brand marks, already
+// normalized for `fill="currentColor"`. The package is `sideEffects: false`
+// so Vite tree-shakes to just the icons we import below.
+const MARKS: Record<Platform, SimpleIcon> = {
+  vercel: siVercel,
+  railway: siRailway,
+  github: siGithub,
 }
 
 type ProviderMarkProps = {
@@ -32,17 +27,19 @@ export function ProviderMark({
   size = 14,
   className,
 }: ProviderMarkProps) {
+  const icon = MARKS[platform]
   return (
-    <span
-      aria-hidden
+    <svg
+      role="img"
+      aria-label={icon.title}
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="currentColor"
       className={className}
-      style={{
-        display: "inline-flex",
-        width: size,
-        height: size,
-        lineHeight: 0,
-      }}
-      dangerouslySetInnerHTML={{ __html: PROCESSED[platform] }}
-    />
+      style={{ display: "inline-block", flexShrink: 0 }}
+    >
+      <path d={icon.path} />
+    </svg>
   )
 }
