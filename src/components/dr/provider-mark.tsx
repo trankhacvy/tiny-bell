@@ -6,10 +6,8 @@ import {
 } from "simple-icons"
 
 import type { Platform } from "@/lib/accounts"
+import { BrandMark } from "./brand-mark"
 
-// simple-icons publishes canonical 24×24 monochrome brand marks, already
-// normalized for `fill="currentColor"`. The package is `sideEffects: false`
-// so Vite tree-shakes to just the icons we import below.
 const MARKS: Record<Platform, SimpleIcon> = {
   vercel: siVercel,
   railway: siRailway,
@@ -27,19 +25,5 @@ export function ProviderMark({
   size = 14,
   className,
 }: ProviderMarkProps) {
-  const icon = MARKS[platform]
-  return (
-    <svg
-      role="img"
-      aria-label={icon.title}
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="currentColor"
-      className={className}
-      style={{ display: "inline-block", flexShrink: 0 }}
-    >
-      <path d={icon.path} />
-    </svg>
-  )
+  return <BrandMark icon={MARKS[platform]} size={size} className={className} />
 }
