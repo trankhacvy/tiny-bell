@@ -80,6 +80,18 @@ export const deploymentsApi = {
   },
 }
 
+export const notificationsApi = {
+  /** Fire a test notification. Succeeds if dispatch worked; whether the
+   *  system actually shows it depends on macOS permission state. */
+  test() {
+    return trackedInvoke<void>("test_notification")
+  },
+  /** Deep-link to macOS System Settings → Notifications → Tiny Bell. */
+  openSettings() {
+    return trackedInvoke<void>("open_notification_settings")
+  },
+}
+
 export const devApi = {
   reset() {
     return trackedInvoke<void>("dev_reset")

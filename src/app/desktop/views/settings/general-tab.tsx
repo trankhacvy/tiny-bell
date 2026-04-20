@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils"
 import { Kbd } from "@/components/dr/kbd"
 import { DRButton } from "@/components/dr/button"
 import { Icon } from "@/components/dr/icon"
-import { devApi, windowApi } from "@/lib/deployments"
+import { devApi, notificationsApi, windowApi } from "@/lib/deployments"
+import { toast } from "sonner"
 import {
   DEFAULT_PREFS,
   prefsApi,
@@ -74,7 +75,15 @@ export function SettingsGeneral() {
               onChange={(v) => void updateOrSwallow("refresh_interval_ms", v)}
             />
           }
+          last
         />
+      </SettingsCard>
+
+      <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
+        Notifications
+      </p>
+      <NotificationPermissionCard />
+      <SettingsCard>
         <SettingsRow
           title="Notify on failed deploy"
           desc="Native notification when a deploy goes red."
@@ -173,6 +182,79 @@ function SettingsCard({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-[8px] border border-border bg-surface">
       {children}
+    </div>
+  )
+}
+
+function NotificationPermissionCard() {
+  const [testing, setTesting] = useState(false)
+  const isDev = import.meta.env.DEV
+
+  async function handleTest() {
+    setTesting(true)
+    try {
+      await notificationsApi.test()
+      toast.success("Test notification sent", {
+        description:
+          "If you didn't see a banner, macOS likely blocked it. Open notification settings below.",
+      })
+    } catch (e) {
+      toast.error("Couldn't send test notification", {
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[8px] border border-border bg-surface">
+      {isDev ? (
+        <div
+          className="flex items-start gap-2 border-b border-border-subtle px-[14px] py-[10px]"
+          style={{
+            background: "color-mix(in oklch, var(--amber) 10%, transparent)",
+          }}
+        >
+          <Icon name="warning" size={12} className="mt-[2px] shrink-0 text-warning" />
+          <p className="text-[11.5px] leading-[1.5] text-muted-foreground">
+            <strong className="font-medium text-foreground">Dev build.</strong>{" "}
+            Notifications are delivered through Terminal, not Tiny Bell. Grant
+            Terminal notification permission in System Settings, or install a
+            release build to use Tiny Bell's own permission.
+          </p>
+        </div>
+      ) : null}
+      <div className="flex items-start gap-3 px-[14px] py-[12px]">
+        <div className="flex-1">
+          <p className="text-[12.5px] font-medium text-foreground">
+            System permission
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-[1.45] text-faint">
+            macOS prompts the first time a notification is delivered. If you
+            never saw a prompt or banners don't appear, open the system panel
+            and make sure notifications are allowed.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border-t border-border-subtle bg-surface-2 px-[14px] py-[9px]">
+        <DRButton
+          variant="secondary"
+          size="sm"
+          onClick={() => void handleTest()}
+          disabled={testing}
+        >
+          {testing ? "Sending…" : "Send test notification"}
+        </DRButton>
+        <DRButton
+          variant="ghost"
+          size="sm"
+          trailing={<Icon name="external" size={11} />}
+          onClick={() => void notificationsApi.openSettings()}
+        >
+          Open macOS settings
+        </DRButton>
+      </div>
     </div>
   )
 }

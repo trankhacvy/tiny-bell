@@ -24,6 +24,7 @@ use adapters::registry::AdapterRegistry;
 use cache::Cache;
 use commands::accounts as account_cmds;
 use commands::deployments as deployment_cmds;
+use commands::notifications as notification_cmds;
 use commands::prefs as prefs_cmds;
 use commands::ux as ux_cmds;
 use commands::window as window_cmds;
@@ -126,6 +127,8 @@ pub fn run() {
             prefs_cmds::get_prefs,
             prefs_cmds::set_pref,
             prefs_cmds::set_window_theme,
+            notification_cmds::test_notification,
+            notification_cmds::open_notification_settings,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
