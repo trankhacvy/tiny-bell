@@ -26,3 +26,6 @@ dist-ssr
 # Local env files
 .env.local
 .env.*.local
+
+# Private local docs (PRD, design notes, etc.)
+.docs/
