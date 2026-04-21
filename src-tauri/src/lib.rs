@@ -99,6 +99,7 @@ pub fn run() {
             account_cmds::start_oauth,
             account_cmds::connect_with_token,
             account_cmds::cancel_oauth,
+            account_cmds::list_auth_methods,
             account_cmds::list_accounts,
             account_cmds::delete_account,
             account_cmds::set_account_enabled,

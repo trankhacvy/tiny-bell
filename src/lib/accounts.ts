@@ -2,6 +2,12 @@ import { trackedInvoke } from "./tauri"
 
 export type Platform = "vercel" | "railway" | "github"
 
+export type AuthMethodKind =
+  | "pat"
+  | "oauth_loopback"
+  | "oauth_broker"
+  | "device_code"
+
 export type AccountProfile = {
   id: string
   platform: Platform
@@ -30,6 +36,9 @@ export const accountsApi = {
   },
   cancelOAuth() {
     return trackedInvoke<void>("cancel_oauth")
+  },
+  listAuthMethods(platform: Platform) {
+    return trackedInvoke<AuthMethodKind[]>("list_auth_methods", { platform })
   },
   connectWithToken(platform: Platform, token: string, scopeId?: string) {
     return trackedInvoke<AccountProfile>("connect_with_token", {

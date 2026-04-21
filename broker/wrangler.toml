@@ -1,0 +1,15 @@
+name = "tiny-bell-broker"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Secrets are set via `wrangler secret put` — never committed here.
+#   BROKER_SIGNING_KEY         — 32-byte random, used for signed cookies
+#   VERCEL_CLIENT_ID           — public, but kept in worker for symmetry
+#   VERCEL_CLIENT_SECRET       — the secret we don't ship in the binary
+#   VERCEL_INTEGRATION_SLUG    — public identifier
+
+[env.staging]
+name = "tiny-bell-broker-staging"
+
+[env.production]
+name = "tiny-bell-broker"

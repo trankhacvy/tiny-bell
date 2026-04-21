@@ -5,10 +5,10 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::adapters::registry::AdapterRegistry;
 use crate::adapters::{AccountProfile, Platform};
-use crate::auth::github::{fetch_github_profile, start_github_oauth};
+use crate::auth::github::fetch_github_profile;
 use crate::auth::pat::fetch_railway_profile;
-use crate::auth::railway::start_railway_oauth;
-use crate::auth::vercel::{fetch_vercel_profile, start_vercel_oauth};
+use crate::auth::strategy::{self, methods_for, AuthMethodKind};
+use crate::auth::vercel::fetch_vercel_profile;
 use crate::auth::{oauth, pat, token_provider, AuthError};
 use crate::store::{self, AccountHealth, StoredAccount};
 
@@ -62,18 +62,11 @@ pub async fn start_oauth(
     app: AppHandle,
     platform: String,
 ) -> Result<AccountProfile, String> {
-    let profile = match platform.as_str() {
-        "vercel" => start_vercel_oauth(app.clone())
-            .await
-            .map_err(|e| e.to_string())?,
-        "railway" => start_railway_oauth(app.clone())
-            .await
-            .map_err(|e| e.to_string())?,
-        "github" => start_github_oauth(app.clone())
-            .await
-            .map_err(|e| e.to_string())?,
-        other => return Err(format!("OAuth not supported for '{other}'")),
-    };
+    let platform_enum = Platform::from_key(&platform)
+        .ok_or_else(|| format!("OAuth not supported for '{platform}'"))?;
+    let profile = strategy::start_oauth(platform_enum, app.clone())
+        .await
+        .map_err(|e| e.to_string())?;
     rehydrate_after_change(&app).await;
     Ok(profile)
 }
@@ -106,7 +99,15 @@ pub async fn connect_with_token(
 #[tauri::command]
 pub async fn cancel_oauth() -> Result<(), String> {
     oauth::abort_current();
+    crate::auth::github::cancel_in_flight();
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_auth_methods(platform: String) -> Result<Vec<AuthMethodKind>, String> {
+    let platform = Platform::from_key(&platform)
+        .ok_or_else(|| format!("Unknown platform '{platform}'"))?;
+    Ok(methods_for(platform))
 }
 
 #[tauri::command]

@@ -1,9 +1,10 @@
+pub mod github;
 pub mod oauth;
 pub mod pat;
 pub mod railway;
+pub mod strategy;
 pub mod token_provider;
 pub mod vercel;
-pub mod github;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {

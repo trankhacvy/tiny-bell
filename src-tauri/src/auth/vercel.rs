@@ -3,23 +3,13 @@ use tauri::{AppHandle, Emitter};
 
 use crate::adapters::{AccountProfile, Platform};
 use crate::auth::oauth::{
-    self, generate_pkce, generate_state, redirect_uri_for, CallbackResult, OAUTH_TIMEOUT_SECS,
+    self, generate_state, redirect_uri_for, CallbackPayload, OAUTH_TIMEOUT_SECS,
 };
 use crate::auth::AuthError;
 use crate::store::{self, AccountHealth, StoredAccount};
 
-const CLIENT_ID: &str = env!("VERCEL_CLIENT_ID");
-const CLIENT_SECRET: &str = env!("VERCEL_CLIENT_SECRET");
-const INTEGRATION_SLUG: &str = env!("VERCEL_INTEGRATION_SLUG");
-const TOKEN_URL: &str = "https://api.vercel.com/v2/oauth/access_token";
+const BROKER_BASE: &str = env!("TINY_BELL_BROKER_BASE");
 pub const DEFAULT_API_BASE: &str = "https://api.vercel.com";
-
-#[derive(Debug, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    #[serde(default)]
-    team_id: Option<String>,
-}
 
 #[derive(Debug, Deserialize)]
 struct VercelUserWrapper {
@@ -49,6 +39,10 @@ struct VercelTeam {
     slug: Option<String>,
     #[serde(default)]
     avatar: Option<String>,
+}
+
+pub fn is_configured() -> bool {
+    !BROKER_BASE.is_empty()
 }
 
 pub async fn fetch_vercel_profile(
@@ -144,35 +138,25 @@ fn avatar_url(hash: String) -> String {
 }
 
 pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthError> {
-    if CLIENT_ID.is_empty() || CLIENT_SECRET.is_empty() {
+    if !is_configured() {
         return Err(AuthError::Config(
-            "Vercel OAuth not configured — set VERCEL_CLIENT_ID and VERCEL_CLIENT_SECRET at build time"
-                .into(),
-        ));
-    }
-    if INTEGRATION_SLUG.is_empty() {
-        return Err(AuthError::Config(
-            "Vercel OAuth not configured — set VERCEL_INTEGRATION_SLUG at build time"
-                .into(),
+            "Vercel OAuth not configured — set TINY_BELL_BROKER_BASE at build time".into(),
         ));
     }
 
-    let pkce = generate_pkce();
     let state = generate_state();
-
-    let binding = oauth::spawn_loopback_server(state.clone())?;
+    let binding = oauth::spawn_loopback_server_payload(state.clone())?;
     let redirect = redirect_uri_for(binding.port);
 
     let authorize_url = format!(
-        "https://vercel.com/integrations/{slug}/new?redirect_uri={ruri}&state={state}",
-        slug = INTEGRATION_SLUG,
+        "{base}/vercel/authorize?redirect={ruri}&state={state}",
+        base = BROKER_BASE.trim_end_matches('/'),
         ruri = urlencoding::encode(&redirect),
         state = urlencoding::encode(&state),
     );
     log::info!(
         target: "tiny_bell::oauth",
-        "OAuth authorize → slug={} redirect_uri={}",
-        INTEGRATION_SLUG, redirect
+        "Vercel broker authorize → redirect_uri={redirect}"
     );
 
     if let Err(e) = open_browser(&authorize_url) {
@@ -182,64 +166,40 @@ pub async fn start_vercel_oauth(app: AppHandle) -> Result<AccountProfile, AuthEr
 
     let callback = tokio::time::timeout(
         std::time::Duration::from_secs(OAUTH_TIMEOUT_SECS),
-        binding.code_rx,
+        binding.rx,
     )
     .await;
 
-    let code = match callback {
-        Err(_) => {
-            oauth::abort_current();
-            return Err(AuthError::Timeout);
-        }
-        Ok(Err(_)) => {
-            oauth::abort_current();
-            return Err(AuthError::ServerClosed);
-        }
-        Ok(Ok(Err(e))) => {
-            oauth::abort_current();
-            return Err(e);
-        }
-        Ok(Ok(Ok(CallbackResult::ProviderError(msg)))) => {
-            oauth::abort_current();
-            return Err(AuthError::Provider(msg));
-        }
-        Ok(Ok(Ok(CallbackResult::Code(code)))) => code,
-    };
-
     oauth::abort_current();
 
-    let _ = pkce;
-    let client = reqwest::Client::new();
-    let res = client
-        .post(TOKEN_URL)
-        .form(&[
-            ("client_id", CLIENT_ID),
-            ("client_secret", CLIENT_SECRET),
-            ("code", code.as_str()),
-            ("redirect_uri", redirect.as_str()),
-        ])
-        .send()
-        .await
-        .map_err(AuthError::from)?;
+    let params = match callback {
+        Err(_) => return Err(AuthError::Timeout),
+        Ok(Err(_)) => return Err(AuthError::ServerClosed),
+        Ok(Ok(Err(e))) => return Err(e),
+        Ok(Ok(Ok(p))) => p,
+    };
 
-    if !res.status().is_success() {
-        let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        return Err(AuthError::Provider(format!(
-            "token exchange failed ({status}): {body}"
-        )));
-    }
+    let payload = oauth::extract_payload(&params, &state)?;
+    let params = match payload {
+        CallbackPayload::ProviderError(msg) => return Err(AuthError::Provider(msg)),
+        CallbackPayload::Params(p) => p,
+    };
 
-    let token: TokenResponse = res.json().await.map_err(AuthError::from)?;
-    let profile = fetch_vercel_profile(&token.access_token, token.team_id.as_deref()).await?;
+    let access_token = params
+        .get("token")
+        .cloned()
+        .ok_or_else(|| AuthError::Provider("Broker did not return a token".into()))?;
+    let team_id = params.get("team_id").cloned().filter(|s| !s.is_empty());
+
+    let profile = fetch_vercel_profile(&access_token, team_id.as_deref()).await?;
 
     let account_id = uuid::Uuid::new_v4().to_string();
-    crate::keychain::store_token(Platform::Vercel.key(), &account_id, &token.access_token)?;
+    crate::keychain::store_token(Platform::Vercel.key(), &account_id, &access_token)?;
     let stored = StoredAccount {
         id: account_id.clone(),
         platform: Platform::Vercel,
         display_name: profile.display_name.clone(),
-        scope_id: token.team_id.clone(),
+        scope_id: team_id.clone(),
         enabled: true,
         created_at: chrono::Utc::now().timestamp_millis(),
         health: AccountHealth::Ok,

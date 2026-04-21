@@ -56,6 +56,11 @@ pub enum CallbackResult {
     ProviderError(String),
 }
 
+pub enum CallbackPayload {
+    Params(HashMap<String, String>),
+    ProviderError(String),
+}
+
 pub fn extract_code(
     params: &HashMap<String, String>,
     expected_state: &str,
@@ -75,6 +80,24 @@ pub fn extract_code(
     Ok(CallbackResult::Code(code.clone()))
 }
 
+pub fn extract_payload(
+    params: &HashMap<String, String>,
+    expected_state: &str,
+) -> Result<CallbackPayload, AuthError> {
+    if let Some(err) = params.get("error") {
+        let desc = params
+            .get("error_description")
+            .cloned()
+            .unwrap_or_else(|| err.clone());
+        return Ok(CallbackPayload::ProviderError(desc));
+    }
+    let state = params.get("state").ok_or(AuthError::StateMismatch)?;
+    if !constant_time_eq(state, expected_state) {
+        return Err(AuthError::StateMismatch);
+    }
+    Ok(CallbackPayload::Params(params.clone()))
+}
+
 struct ActiveServer {
     shutdown: Option<oneshot::Sender<()>>,
     join: Option<std::thread::JoinHandle<()>>,
@@ -89,6 +112,11 @@ fn slot() -> &'static Mutex<Option<ActiveServer>> {
 pub struct LoopbackBinding {
     pub port: u16,
     pub code_rx: oneshot::Receiver<Result<CallbackResult, AuthError>>,
+}
+
+pub struct LoopbackPayloadBinding {
+    pub port: u16,
+    pub rx: oneshot::Receiver<Result<HashMap<String, String>, AuthError>>,
 }
 
 pub fn spawn_loopback_server(expected_state: String) -> Result<LoopbackBinding, AuthError> {
@@ -148,6 +176,76 @@ pub fn spawn_loopback_server(expected_state: String) -> Result<LoopbackBinding, 
     }
 
     Ok(LoopbackBinding { port, code_rx })
+}
+
+pub fn spawn_loopback_server_payload(
+    expected_state: String,
+) -> Result<LoopbackPayloadBinding, AuthError> {
+    abort_current();
+
+    let (server, port) = bind_first_available().map_err(|e| AuthError::Server(e))?;
+    let (tx, rx) = oneshot::channel::<Result<HashMap<String, String>, AuthError>>();
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+
+    let server_arc = std::sync::Arc::new(server);
+    let server_for_thread = server_arc.clone();
+    let expected_state_for_thread = expected_state;
+
+    let join = std::thread::Builder::new()
+        .name("oauth-loopback-payload".into())
+        .spawn(move || {
+            let mut tx_opt = Some(tx);
+            loop {
+                match server_for_thread.recv_timeout(std::time::Duration::from_millis(250)) {
+                    Ok(Some(req)) => {
+                        let url = req.url().to_string();
+                        let params = parse_query(&url);
+                        let has_error = params.contains_key("error");
+                        let state_ok = params
+                            .get("state")
+                            .map(|s| constant_time_eq(s, &expected_state_for_thread))
+                            .unwrap_or(false);
+                        let html = if !has_error && state_ok {
+                            SUCCESS_HTML
+                        } else {
+                            FAILURE_HTML
+                        };
+                        let header: tiny_http::Header =
+                            "Content-Type: text/html; charset=utf-8".parse().unwrap();
+                        let _ = req.respond(
+                            tiny_http::Response::from_string(html).with_header(header),
+                        );
+                        if let Some(tx) = tx_opt.take() {
+                            if !state_ok && !has_error {
+                                let _ = tx.send(Err(AuthError::StateMismatch));
+                            } else {
+                                let _ = tx.send(Ok(params));
+                            }
+                        }
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(_) => {}
+                }
+                if shutdown_rx.try_recv().is_ok() {
+                    if let Some(tx) = tx_opt.take() {
+                        let _ = tx.send(Err(AuthError::ServerClosed));
+                    }
+                    break;
+                }
+            }
+        })
+        .map_err(|e| AuthError::Server(e.to_string()))?;
+
+    {
+        let mut guard = slot().lock().expect("oauth slot poisoned");
+        *guard = Some(ActiveServer {
+            shutdown: Some(shutdown_tx),
+            join: Some(join),
+        });
+    }
+
+    Ok(LoopbackPayloadBinding { port, rx })
 }
 
 fn bind_first_available() -> Result<(tiny_http::Server, u16), String> {
