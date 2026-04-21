@@ -102,35 +102,36 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: false
 
-      - name: Collect updater signature
+      - name: Locate updater signature
         id: sig
+        shell: bash
         run: |
           set -euo pipefail
-          target="${{ matrix.args }}"
-          target="${target##*--target }"
-          sig_path="src-tauri/target/${target}/release/bundle/macos/Tiny Bell.app.tar.gz.sig"
-          if [ ! -f "$sig_path" ]; then
-            echo "signature not found at $sig_path" >&2
+          args='${{ matrix.args }}'
+          case "$args" in
+            *aarch64-apple-darwin*) platform_key="darwin-aarch64" ;;
+            *x86_64-apple-darwin*)  platform_key="darwin-x86_64" ;;
+            *) echo "unrecognized target in args: $args" >&2; exit 1 ;;
+          esac
+
+          sig_path=$(find src-tauri/target -path '*/release/bundle/macos/*.app.tar.gz.sig' -print -quit || true)
+          if [ -z "$sig_path" ]; then
+            echo "no .sig produced under src-tauri/target; tree:" >&2
+            find src-tauri/target -maxdepth 6 -name '*.sig' -o -name '*.app.tar.gz' 2>/dev/null | head -30 >&2 || true
             exit 1
           fi
-          case "$target" in
-            aarch64-apple-darwin) platform_key="darwin-aarch64"; arch_asset="aarch64" ;;
-            x86_64-apple-darwin)  platform_key="darwin-x86_64"; arch_asset="x64"      ;;
-            *) echo "unsupported target: $target" >&2; exit 1 ;;
-          esac
+
+          staged="/tmp/updater-${platform_key}.sig"
+          cp "$sig_path" "$staged"
           echo "platform_key=${platform_key}" >> "$GITHUB_OUTPUT"
-          echo "arch_asset=${arch_asset}" >> "$GITHUB_OUTPUT"
-          echo "signature<<__EOF__" >> "$GITHUB_OUTPUT"
-          cat "$sig_path" >> "$GITHUB_OUTPUT"
-          echo "" >> "$GITHUB_OUTPUT"
-          echo "__EOF__" >> "$GITHUB_OUTPUT"
+          echo "staged_path=${staged}" >> "$GITHUB_OUTPUT"
+          echo "Found signature for ${platform_key}: $sig_path"
 
       - name: Upload signature artifact
         uses: actions/upload-artifact@v4
         with:
           name: updater-sig-${{ steps.sig.outputs.platform_key }}
-          path: |
-            src-tauri/target/*/release/bundle/macos/Tiny Bell.app.tar.gz.sig
+          path: ${{ steps.sig.outputs.staged_path }}
           retention-days: 1
           if-no-files-found: error
 
@@ -168,8 +169,8 @@ jobs:
           version="${tag#v}"
           base="https://github.com/trankhacvy/tiny-bell/releases/download/${tag}"
 
-          aarch64_sig=$(find sigs -path '*aarch64-apple-darwin*.sig' -print -quit)
-          x86_64_sig=$(find sigs -path '*x86_64-apple-darwin*.sig' -print -quit)
+          aarch64_sig=$(find sigs -name 'updater-darwin-aarch64.sig' -print -quit)
+          x86_64_sig=$(find sigs -name 'updater-darwin-x86_64.sig' -print -quit)
           if [ -z "${aarch64_sig}" ] || [ -z "${x86_64_sig}" ]; then
             echo "missing one or more signatures" >&2
             find sigs >&2
