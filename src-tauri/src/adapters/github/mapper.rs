@@ -59,7 +59,7 @@ pub fn deployment_from_run(run: WorkflowRunDto, project_id: &str) -> Deployment 
         service_name: run.name,
         state,
         environment: run.event.unwrap_or_else(|| "push".to_string()),
-        url: run.html_url.clone(),
+        url: None,
         inspector_url: run.html_url,
         branch: run.head_branch,
         commit_sha: run.head_sha,

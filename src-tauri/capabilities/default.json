@@ -15,9 +15,14 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://vercel.com/*" },
-        { "url": "https://railway.app/*" },
+        { "url": "https://*.vercel.app/*" },
+        { "url": "https://*.vercel.com/*" },
         { "url": "https://railway.com/*" },
-        { "url": "https://github.com/*" }
+        { "url": "https://railway.app/*" },
+        { "url": "https://*.railway.app/*" },
+        { "url": "https://*.up.railway.app/*" },
+        { "url": "https://github.com/*" },
+        { "url": "https://*.github.com/*" }
       ]
     }
   ]

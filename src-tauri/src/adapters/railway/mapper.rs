@@ -75,6 +75,9 @@ pub fn deployment_from_node(node: DeploymentNode, project_id: &str) -> Deploymen
         None => (None, None),
     };
 
+    let inspector_url = Some(build_inspector_url(project_id, service_id.as_deref()));
+    let url = node.url.or(node.static_url).and_then(normalize_url);
+
     Deployment {
         id: node.id,
         project_id: project_id.to_string(),
@@ -82,8 +85,8 @@ pub fn deployment_from_node(node: DeploymentNode, project_id: &str) -> Deploymen
         service_name,
         state,
         environment: "production".to_string(),
-        url: node.url.or(node.static_url),
-        inspector_url: None,
+        url,
+        inspector_url,
         branch,
         commit_sha,
         commit_message,
@@ -94,6 +97,24 @@ pub fn deployment_from_node(node: DeploymentNode, project_id: &str) -> Deploymen
         duration_ms,
         progress: None,
     }
+}
+
+fn build_inspector_url(project_id: &str, service_id: Option<&str>) -> String {
+    match service_id {
+        Some(sid) => format!("https://railway.com/project/{project_id}/service/{sid}"),
+        None => format!("https://railway.com/project/{project_id}"),
+    }
+}
+
+fn normalize_url(raw: String) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return Some(trimmed.to_string());
+    }
+    Some(format!("https://{trimmed}"))
 }
 
 #[cfg(test)]
