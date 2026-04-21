@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { DRBadge } from "@/components/dr/badge"
 import { DRButton } from "@/components/dr/button"
-import { ChevronDown, Plus, TriangleAlert } from "lucide-react"
+import { Check, ChevronDown, Plus, TriangleAlert, X } from "lucide-react"
 import { ProviderMark } from "@/components/dr/provider-mark"
 import { DRMenu, DRMenuItem, DRMenuSeparator } from "@/components/dr/menu"
 import { AddAccountDialog } from "@/components/account/add-account-dialog"
@@ -297,16 +297,41 @@ function RenameInput({ value, onChange, onCommit, onCancel }: RenameInputProps) 
     }
   }
 
+  const disabled = value.trim().length === 0
+
   return (
-    <input
-      ref={ref}
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={handleKeyDown}
-      onBlur={onCommit}
-      className="block w-full rounded-[4px] border border-border bg-surface-2 px-1.5 py-0.5 text-[12.5px] font-semibold text-foreground outline-none focus:border-foreground"
-    />
+    <div className="flex items-center gap-1">
+      <input
+        ref={ref}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={onCancel}
+        className="block min-w-0 flex-1 rounded-[4px] border border-border bg-surface-2 px-1.5 py-0.5 text-[12.5px] font-semibold text-foreground outline-none focus:border-foreground"
+      />
+      <button
+        type="button"
+        aria-label="Save"
+        title="Save (⏎)"
+        disabled={disabled}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onCommit}
+        className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] text-success outline-none hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+      >
+        <Check size={13} />
+      </button>
+      <button
+        type="button"
+        aria-label="Cancel"
+        title="Cancel (Esc)"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onCancel}
+        className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none hover:bg-hover hover:text-foreground"
+      >
+        <X size={13} />
+      </button>
+    </div>
   )
 }
 
