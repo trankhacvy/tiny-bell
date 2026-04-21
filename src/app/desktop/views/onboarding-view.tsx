@@ -25,16 +25,6 @@ import {
 } from "@/lib/deployments"
 import { formatRelative } from "@/lib/format"
 import type { DesktopRoute } from "../desktop-app"
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item"
-import { Image } from "@tauri-apps/api/image"
-
 type Step =
   | { name: "welcome" }
   | { name: "connect"; platform: Platform; remaining: Platform[] }

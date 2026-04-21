@@ -127,7 +127,6 @@ export function ProjectFilter({
           align="start"
           side="bottom"
           sideOffset={6}
-          onOpenAutoFocus={(e) => e.preventDefault()}
           className={cn(
             "z-50 w-[260px] overflow-hidden rounded-[10px] border border-border bg-surface text-foreground",
             "shadow-[0_8px_24px_rgba(20,20,30,0.12),0_0_0_0.5px_rgba(0,0,0,0.05)]",
