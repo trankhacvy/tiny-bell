@@ -102,6 +102,38 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: false
 
+      - name: Collect updater signature
+        id: sig
+        run: |
+          set -euo pipefail
+          target="${{ matrix.args }}"
+          target="${target##*--target }"
+          sig_path="src-tauri/target/${target}/release/bundle/macos/Tiny Bell.app.tar.gz.sig"
+          if [ ! -f "$sig_path" ]; then
+            echo "signature not found at $sig_path" >&2
+            exit 1
+          fi
+          case "$target" in
+            aarch64-apple-darwin) platform_key="darwin-aarch64"; arch_asset="aarch64" ;;
+            x86_64-apple-darwin)  platform_key="darwin-x86_64"; arch_asset="x64"      ;;
+            *) echo "unsupported target: $target" >&2; exit 1 ;;
+          esac
+          echo "platform_key=${platform_key}" >> "$GITHUB_OUTPUT"
+          echo "arch_asset=${arch_asset}" >> "$GITHUB_OUTPUT"
+          echo "signature<<__EOF__" >> "$GITHUB_OUTPUT"
+          cat "$sig_path" >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "__EOF__" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signature artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-sig-${{ steps.sig.outputs.platform_key }}
+          path: |
+            src-tauri/target/*/release/bundle/macos/Tiny Bell.app.tar.gz.sig
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Release summary
         if: steps.tauri.outputs.releaseHtmlUrl != ''
         run: |
@@ -113,3 +145,57 @@ jobs:
             echo "- Release: ${{ steps.tauri.outputs.releaseHtmlUrl }}"
             echo "- Artifacts: \`${{ steps.tauri.outputs.artifactPaths }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-updater:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download signature artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: sigs
+          pattern: updater-sig-*
+          merge-multiple: false
+
+      - name: Build and upload latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          base="https://github.com/trankhacvy/tiny-bell/releases/download/${tag}"
+
+          aarch64_sig=$(find sigs -path '*aarch64-apple-darwin*.sig' -print -quit)
+          x86_64_sig=$(find sigs -path '*x86_64-apple-darwin*.sig' -print -quit)
+          if [ -z "${aarch64_sig}" ] || [ -z "${x86_64_sig}" ]; then
+            echo "missing one or more signatures" >&2
+            find sigs >&2
+            exit 1
+          fi
+
+          aarch64_value=$(cat "${aarch64_sig}")
+          x86_64_value=$(cat "${x86_64_sig}")
+          pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          jq -n \
+            --arg version "${version}" \
+            --arg pub_date "${pub_date}" \
+            --arg aarch64_sig "${aarch64_value}" \
+            --arg x86_64_sig "${x86_64_value}" \
+            --arg aarch64_url "${base}/tiny-bell-${version}-darwin-aarch64.app.tar.gz" \
+            --arg x86_64_url "${base}/tiny-bell-${version}-darwin-x64.app.tar.gz" \
+            '{
+              version: $version,
+              notes: "See the GitHub release for details.",
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": { signature: $aarch64_sig, url: $aarch64_url },
+                "darwin-x86_64":  { signature: $x86_64_sig,  url: $x86_64_url  }
+              }
+            }' > latest.json
+
+          cat latest.json
+          gh release upload "${tag}" latest.json --repo trankhacvy/tiny-bell --clobber
