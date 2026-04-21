@@ -138,15 +138,18 @@ xattr -dr com.apple.quarantine /Applications/Tiny\ Bell.app
 
 After either, the app launches normally on subsequent runs.
 
-## Screenshots
+## Demo
 
 <table>
   <tr>
-    <td align="center"><strong>Deployment feed</strong><br>Live status, commit, branch, one-click inspect<br><img src="screenshots/deployments.png" width="400"></td>
-    <td align="center"><strong>Connected accounts</strong><br>Per-account health, rename, re-auth, removal<br><img src="screenshots/accounts.png" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><strong>Add account</strong><br>OAuth, Device Flow, or paste-token — per provider<br><img src="screenshots/add-account.png" width="400"></td>
+    <td align="center">
+      <strong>Popover</strong><br>Menu-bar feed with expandable rows<br>
+      <img src="demo/popover.gif" alt="Popover demo" width="400">
+    </td>
+    <td align="center">
+      <strong>Desktop</strong><br>Settings, onboarding, account management<br>
+      <img src="demo/desktop.gif" alt="Desktop demo" width="400">
+    </td>
   </tr>
 </table>
 
