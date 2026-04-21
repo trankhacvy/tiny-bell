@@ -99,12 +99,14 @@ function AccountPicker({
 
       <DRMenuSeparator />
 
-      {(["vercel", "railway"] as Platform[]).map((p) => {
+      {(["vercel", "railway", "github"] as Platform[]).map((p) => {
         const group = accounts.filter((a) => a.platform === p)
         if (group.length === 0) return null
         return (
           <Fragment key={p}>
-            <DRMenuLabel>{p === "vercel" ? "Vercel" : "Railway"}</DRMenuLabel>
+            <DRMenuLabel>
+              {p === "vercel" ? "Vercel" : p === "railway" ? "Railway" : "GitHub"}
+            </DRMenuLabel>
             {group.map((acc) => (
               <DM.Item
                 key={acc.id}

@@ -86,9 +86,10 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
     setDialogOpen(true)
   }
 
-  async function handleConnected(_profile: AccountProfile) {
+  async function handleConnected(profile: AccountProfile) {
     // If the user was reconnecting a broken account, retire the old record
     // after the replacement successfully authenticates.
+    const wasReauth = reauthTarget !== null
     if (reauthTarget) {
       try {
         await accountsApi.remove(reauthTarget.id)
@@ -98,6 +99,12 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
     }
     setReauthTarget(null)
     await onAccountsChange()
+
+    // GitHub accounts can't poll anything until the user picks which repos
+    // to monitor. Skip this for re-auth (user already has repos selected).
+    if (profile.platform === "github" && !wasReauth) {
+      setRepoSelectorAccountId(profile.id)
+    }
   }
 
   function handleDialogOpenChange(open: boolean) {
