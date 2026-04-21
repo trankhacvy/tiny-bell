@@ -8,12 +8,12 @@ Tiny Bell supports connecting multiple **Vercel**, **Railway**, and **GitHub** a
 
 This opens your browser to Vercel's approval screen. Tiny Bell never sees your Vercel password.
 
-1. Click **Add account** → pick the **Vercel** tab → **Sign in with Vercel**.
+1. Click **Add account** → pick the **Vercel** tab → **Connect with Vercel**.
 2. Your default browser opens Vercel.
 3. Approve the **Tiny Bell** integration for the scope you want (personal or a team).
 4. Browser tab auto-closes; Tiny Bell confirms the connection.
 
-Under the hood, Tiny Bell runs a short-lived loopback server on `127.0.0.1:53123` (with fallback ports `53124` and `53125`) to receive the redirect. PKCE protects the token exchange.
+Under the hood, Tiny Bell opens Vercel's approval screen via the Tiny Bell OAuth broker (see `broker/` in the source tree, and [docs/auth.md](auth.md)). The broker holds the `client_secret` we don't ship in the binary; your access token passes through it once and is never stored server-side. A short-lived loopback server on `127.0.0.1:53123` (with fallback ports `53124` / `53125`) receives the token back.
 
 ### 2. Paste a Personal Access Token
 
@@ -47,14 +47,14 @@ If OAuth isn't available in your build or your org disallows it:
 
 ## GitHub — two ways to connect
 
-### 1. Connect with GitHub (OAuth, recommended)
+### 1. Connect with GitHub (Device Flow, recommended)
 
-Same loopback flow as Vercel and Railway.
+Tiny Bell uses GitHub's [OAuth Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow). No `client_secret` ships in the app, no loopback server is needed, and no redirect URL has to be configured.
 
-1. Click **Add account** → pick the **GitHub** tab → **Connect with GitHub**.
-2. Your default browser opens GitHub's authorization screen.
-3. Approve Tiny Bell.
-4. Browser tab auto-closes; Tiny Bell confirms the connection.
+1. Click **Add account** → pick the **GitHub** tab → **Device code**.
+2. Tiny Bell shows an 8-character code like `WDJB-MJHT` and opens <https://github.com/login/device>.
+3. Paste or type the code, approve Tiny Bell.
+4. Tiny Bell finishes the connection automatically within a few seconds.
 
 GitHub OAuth tokens do not expire — no refresh is needed.
 
@@ -86,7 +86,7 @@ Tokens are never written to log files. Tiny Bell's log pipeline runs a redactor 
 |---|---|---|
 | "Didn't receive approval — try again" | You closed the browser tab before approving, or waited longer than 5 minutes. | Try again. |
 | "Security check failed. Please try again." | CSRF `state` did not match. | Re-start the flow; do not reuse a stale browser tab. |
-| "OAuth is not configured in this build." | Your build does not include `VERCEL_CLIENT_ID` or `RAILWAY_CLIENT_ID`. | Use the **Paste token** option, or build with the env vars set. |
+| "OAuth is not configured in this build." | Your build does not include the relevant `*_CLIENT_ID` or `TINY_BELL_BROKER_BASE`. | Use the **Paste token** option, or build with the env vars set. |
 | "Port 53123 in use" | Another app is holding the loopback port. | Close the other app, then retry. Tiny Bell automatically tries 53124 / 53125 as fallbacks. |
 | Railway token rejected with "Invalid token" | PAT revoked or missing scopes. | Create a new token, or connect with OAuth instead. |
 | "Your Railway session expired. Please reconnect." | Refresh token was rejected (revoked or older-than-rotated). | Remove the account and reconnect with OAuth. |

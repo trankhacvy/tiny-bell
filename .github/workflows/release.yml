@@ -54,7 +54,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID_PROD }}
-          VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET_PROD }}
+          RAILWAY_CLIENT_ID: ${{ secrets.RAILWAY_CLIENT_ID_PROD }}
+          GITHUB_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID_PROD }}
+          TINY_BELL_BROKER_BASE: ${{ secrets.TINY_BELL_BROKER_BASE_PROD }}
         with:
           tagName: v__VERSION__
           releaseName: v__VERSION__

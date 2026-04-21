@@ -29,5 +29,7 @@ jobs:
         working-directory: src-tauri
         env:
           VERCEL_CLIENT_ID: ${{ secrets.VERCEL_CLIENT_ID_DEV || '' }}
-          VERCEL_CLIENT_SECRET: ${{ secrets.VERCEL_CLIENT_SECRET_DEV || '' }}
+          RAILWAY_CLIENT_ID: ${{ secrets.RAILWAY_CLIENT_ID_DEV || '' }}
+          GITHUB_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID_DEV || '' }}
+          TINY_BELL_BROKER_BASE: ${{ secrets.TINY_BELL_BROKER_BASE_DEV || '' }}
         run: cargo test --lib
