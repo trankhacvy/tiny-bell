@@ -10,8 +10,8 @@ use tauri_plugin_opener::OpenerExt;
 pub async fn test_notification<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     app.notification()
         .builder()
-        .title("Tiny Bell test notification")
-        .body("If you can read this, notifications are working.")
+        .title("tiny-bell · Deployment ready")
+        .body("feat(web): optimize image loading\nmain · Maya")
         .show()
         .map_err(|e| e.to_string())
 }

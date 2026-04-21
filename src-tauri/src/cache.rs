@@ -23,6 +23,11 @@ pub struct DiffEvent {
     pub deployment_id: String,
     pub previous: Option<DeploymentState>,
     pub current: DeploymentState,
+    pub commit_message: Option<String>,
+    pub branch: Option<String>,
+    pub author_name: Option<String>,
+    pub inspector_url: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -84,6 +89,11 @@ impl Cache {
                     deployment_id: current.id.clone(),
                     previous: previous_state,
                     current: current.state.clone(),
+                    commit_message: current.commit_message.clone(),
+                    branch: current.branch.clone(),
+                    author_name: current.author_name.clone(),
+                    inspector_url: current.inspector_url.clone(),
+                    url: current.url.clone(),
                 });
             }
         }

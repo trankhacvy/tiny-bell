@@ -1,6 +1,6 @@
 [package]
 name = "tiny-bell"
-version = "0.1.0"
+version = "0.1.1"
 description = "A quiet menubar app for monitoring your deploys"
 authors = ["khacvy"]
 edition = "2021"
