@@ -41,6 +41,7 @@ export function PopoverApp() {
     useState<ProjectSelection>(null)
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [isChecking, setIsChecking] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -266,6 +267,12 @@ export function PopoverApp() {
                         deployment={d}
                         project={projectsById.get(d.project_id) ?? null}
                         focused={d.id === focusedId}
+                        expanded={d.id === expandedId}
+                        onToggleExpand={() =>
+                          setExpandedId((prev) =>
+                            prev === d.id ? null : d.id,
+                          )
+                        }
                       />
                     ))}
                   </section>
