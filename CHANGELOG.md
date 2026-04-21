@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] — 2026-04-21
 
 Initial public release. macOS (Apple Silicon + Intel), unsigned builds.
 
