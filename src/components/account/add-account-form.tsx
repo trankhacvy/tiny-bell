@@ -387,6 +387,19 @@ type DeviceCodePanelProps = {
 }
 
 function DeviceCodePanel({ code, onCopy, onOpen }: DeviceCodePanelProps) {
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1800)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+
+  function handleClick() {
+    onCopy()
+    setCopied(true)
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-[6px] border border-border bg-surface-2 p-3">
       <p className="text-[12px] text-muted-foreground">
@@ -403,8 +416,8 @@ function DeviceCodePanel({ code, onCopy, onOpen }: DeviceCodePanelProps) {
         <code className="flex-1 rounded-[4px] border border-border bg-surface px-2.5 py-1.5 text-center font-mono-tabular text-[16px] tracking-[0.2em] text-foreground">
           {code}
         </code>
-        <DRButton variant="ghost" size="sm" onClick={onCopy}>
-          Copy
+        <DRButton variant="ghost" size="sm" onClick={handleClick}>
+          {copied ? "Copied" : "Copy"}
         </DRButton>
       </div>
       <p className="text-[11px] text-muted-foreground">
