@@ -142,10 +142,9 @@ export function OnboardingView({
   }
 
   return (
-    <DRWindow
-      title="Tiny Bell"
-      titleRight={
-        hasAccounts ? (
+    <DRWindow>
+      {hasAccounts ? (
+        <div className="absolute right-3 top-3 z-10">
           <DRButton
             variant="ghost"
             size="sm"
@@ -153,9 +152,8 @@ export function OnboardingView({
           >
             Settings
           </DRButton>
-        ) : null
-      }
-    >
+        </div>
+      ) : null}
       {step.name === "welcome" ? (
         <WelcomeStep
           onPick={(picks) => {

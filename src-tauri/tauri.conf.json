@@ -21,9 +21,9 @@
         "minWidth": 480,
         "minHeight": 560,
         "resizable": true,
-        "decorations": false,
+        "decorations": true,
         "visible": false,
-        "center": true
+        "center": false
       },
       {
         "label": "popover",
@@ -53,7 +53,7 @@
     "targets": "all",
     "category": "DeveloperTool",
     "publisher": "khacvy",
-    "copyright": "Copyright \u00a9 2025 khacvy. All rights reserved.",
+    "copyright": "Copyright \u00a9 2026 khacvy. All rights reserved.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
