@@ -100,12 +100,6 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
     setDialogOpen(true)
   }
 
-  function handleAddAccountFor(platform: Platform) {
-    setReauthTarget(null)
-    setDialogPlatform(platform)
-    setDialogOpen(true)
-  }
-
   async function handleConnected(profile: AccountProfile) {
     // If the user was reconnecting a broken account, retire the old record
     // after the replacement successfully authenticates.
@@ -236,30 +230,6 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
           ))}
         </ul>
       ) : null}
-
-      <p className="mt-[22px] mb-2 text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
-        Add another
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        <DRButton
-          variant="secondary"
-          size="sm"
-          fullWidth
-          leading={<ProviderMark platform="vercel" size={13} />}
-          onClick={() => handleAddAccountFor("vercel")}
-        >
-          Vercel team
-        </DRButton>
-        <DRButton
-          variant="secondary"
-          size="sm"
-          fullWidth
-          leading={<ProviderMark platform="railway" size={13} />}
-          onClick={() => handleAddAccountFor("railway")}
-        >
-          Railway account
-        </DRButton>
-      </div>
 
       <AddAccountDialog
         open={dialogOpen}
