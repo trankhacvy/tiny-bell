@@ -6,14 +6,10 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: macos-latest
+  typecheck:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> src-tauri/target
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -21,10 +17,17 @@ jobs:
         with:
           node-version: "20"
           cache: pnpm
-      - name: Install frontend
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  rust-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> src-tauri/target
       - name: Rust tests
         working-directory: src-tauri
         env:
