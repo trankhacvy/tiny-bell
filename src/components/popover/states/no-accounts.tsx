@@ -1,5 +1,5 @@
 import { DRButton } from "@/components/dr/button"
-import { Icon } from "@/components/dr/icon"
+import { ExternalLink } from "lucide-react"
 import { windowApi } from "@/lib/deployments"
 
 export function PopoverNoAccounts() {
@@ -24,7 +24,7 @@ export function PopoverNoAccounts() {
       <DRButton
         variant="primary"
         size="sm"
-        leading={<Icon name="external" size={12} />}
+        leading={<ExternalLink size={12} />}
         onClick={() => void windowApi.openDesktop("onboarding")}
       >
         Open Tiny Bell

@@ -2,7 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { StatusGlyph } from "@/components/dr/status-glyph"
 import { InitialsAvatar } from "@/components/dr/initials-avatar"
 import { DRButton } from "@/components/dr/button"
-import { Icon } from "@/components/dr/icon"
+import { ExternalLink } from "lucide-react"
 import { Kbd } from "@/components/dr/kbd"
 import { formatRelative } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -140,7 +140,7 @@ export function DeployRow({ deployment, project, focused }: DeployRowProps) {
           <DRButton
             variant="secondary"
             size="sm"
-            leading={<Icon name="external" size={11} />}
+            leading={<ExternalLink size={11} />}
             className="h-6 px-[9px] text-[11.5px]"
             onClick={(e) => {
               e.stopPropagation()
@@ -152,7 +152,7 @@ export function DeployRow({ deployment, project, focused }: DeployRowProps) {
           <DRButton
             variant="ghost"
             size="sm"
-            leading={<Icon name="external" size={11} />}
+            leading={<ExternalLink size={11} />}
             className="h-6 px-2 text-[11.5px]"
             onClick={(e) => {
               e.stopPropagation()

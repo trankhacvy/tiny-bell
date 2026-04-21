@@ -1,16 +1,16 @@
-import { forwardRef, type ButtonHTMLAttributes } from "react"
-import { Icon, type IconName } from "@/components/dr/icon"
+import { forwardRef, type ButtonHTMLAttributes, type ComponentType } from "react"
+import type { LucideProps } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type IconButtonProps = {
-  name: IconName
+  icon: ComponentType<LucideProps>
   size?: number
   tooltip?: string
 } & ButtonHTMLAttributes<HTMLButtonElement>
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   function IconButton(
-    { name, size = 14, tooltip, className, type = "button", ...rest },
+    { icon: Icon, size = 14, tooltip, className, type = "button", ...rest },
     ref,
   ) {
     return (
@@ -27,7 +27,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         )}
         {...rest}
       >
-        <Icon name={name} size={size} />
+        <Icon size={size} />
       </button>
     )
   },

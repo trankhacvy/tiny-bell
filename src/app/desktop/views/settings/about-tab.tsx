@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { getVersion } from "@tauri-apps/api/app"
 
 import { DRBadge } from "@/components/dr/badge"
-import { Icon } from "@/components/dr/icon"
+import { ExternalLink } from "lucide-react"
 import { deploymentsApi } from "@/lib/deployments"
 import { cn } from "@/lib/utils"
 
@@ -82,7 +82,7 @@ export function SettingsAbout() {
             )}
           >
             {label}
-            <Icon name="external" size={12} className="text-faint" />
+            <ExternalLink size={12} className="text-faint" />
           </button>
         ))}
         <div className="flex items-center justify-between border-t border-border-subtle px-[14px] py-[10px]">

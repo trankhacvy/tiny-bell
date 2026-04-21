@@ -5,7 +5,7 @@ import { DRWindow } from "@/components/dr/window"
 import { DRButton } from "@/components/dr/button"
 import { DRBadge } from "@/components/dr/badge"
 import { Kbd } from "@/components/dr/kbd"
-import { Icon } from "@/components/dr/icon"
+import { Check, ChevronRight, Plus } from "lucide-react"
 import { ProviderMark } from "@/components/dr/provider-mark"
 import { BrandMark } from "@/components/dr/brand-mark"
 import { siNetlify, siRender, type SimpleIcon } from "simple-icons"
@@ -270,11 +270,7 @@ function WelcomeStep({ onPick }: WelcomeStepProps) {
                     <span className="block text-[12px] text-faint">{desc}</span>
                   </span>
                   {isSelected && (
-                    <Icon
-                      name="check"
-                      size={14}
-                      className="shrink-0 text-foreground"
-                    />
+                    <Check size={14} className="shrink-0 text-foreground" />
                   )}
                 </button>
               </>
@@ -316,7 +312,7 @@ function WelcomeStep({ onPick }: WelcomeStepProps) {
           variant="primary"
           size="sm"
           disabled={!selected}
-          trailing={<Icon name="chevron-right" size={13} />}
+          trailing={<ChevronRight size={13} />}
           onClick={() => selected && onPick([selected])}
         >
           Continue with {selected ? PLATFORM_LABEL[selected] : "\u2026"}
@@ -358,7 +354,7 @@ function ConnectStep({
             size="sm"
             className="h-[22px] px-[6px]"
             leading={
-              <Icon name="chevron-right" size={12} className="rotate-180" />
+              <ChevronRight size={12} className="rotate-180" />
             }
             onClick={onBack}
           >
@@ -510,7 +506,7 @@ function SuccessStep({
             margin: "0 auto 16px",
           }}
         >
-          <Icon name="check" size={22} className="text-success" />
+          <Check size={22} className="text-success" />
         </div>
         <h1
           className="mb-1 text-center font-display text-[20px] font-semibold text-foreground"
@@ -595,7 +591,7 @@ function SuccessStep({
         <DRButton
           variant="ghost"
           size="sm"
-          leading={<Icon name="plus" size={12} />}
+          leading={<Plus size={12} />}
           onClick={onAddAnother}
         >
           Add another account

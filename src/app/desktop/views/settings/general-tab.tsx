@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { cn } from "@/lib/utils"
 import { Kbd } from "@/components/dr/kbd"
 import { DRButton } from "@/components/dr/button"
-import { Icon } from "@/components/dr/icon"
+import { ExternalLink, TriangleAlert } from "lucide-react"
 import { devApi, notificationsApi, windowApi } from "@/lib/deployments"
 import { toast } from "sonner"
 import {
@@ -165,7 +165,7 @@ export function SettingsGeneral() {
         <DRButton
           variant="ghost"
           size="sm"
-          leading={<Icon name="warning" size={12} className="text-danger" />}
+          leading={<TriangleAlert size={12} className="text-danger" />}
           className="text-danger hover:text-danger"
           onClick={() => void windowApi.quit()}
         >
@@ -216,7 +216,7 @@ function NotificationPermissionCard() {
             background: "color-mix(in oklch, var(--amber) 10%, transparent)",
           }}
         >
-          <Icon name="warning" size={12} className="mt-[2px] shrink-0 text-warning" />
+          <TriangleAlert size={12} className="mt-[2px] shrink-0 text-warning" />
           <p className="text-[11.5px] leading-[1.5] text-muted-foreground">
             <strong className="font-medium text-foreground">Dev build.</strong>{" "}
             Notifications are delivered through Terminal, not Tiny Bell. Grant
@@ -249,7 +249,7 @@ function NotificationPermissionCard() {
         <DRButton
           variant="ghost"
           size="sm"
-          trailing={<Icon name="external" size={11} />}
+          trailing={<ExternalLink size={11} />}
           onClick={() => void notificationsApi.openSettings()}
         >
           Open macOS settings
@@ -553,7 +553,7 @@ function DevResetSection() {
       <DRButton
         variant="secondary"
         size="sm"
-        leading={<Icon name="warning" size={12} className="text-danger" />}
+        leading={<TriangleAlert size={12} className="text-danger" />}
         className="border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
         disabled={busy || done}
         onClick={() => void handleClick()}

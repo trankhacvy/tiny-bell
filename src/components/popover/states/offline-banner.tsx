@@ -1,5 +1,5 @@
 import { DRButton } from "@/components/dr/button"
-import { Icon } from "@/components/dr/icon"
+import { TriangleAlert } from "lucide-react"
 import { deploymentsApi } from "@/lib/deployments"
 import { formatRelative } from "@/lib/format"
 
@@ -17,7 +17,7 @@ export function OfflineBanner({ lastRefreshedAt }: Props) {
         borderColor: "color-mix(in oklch, var(--amber) 30%, transparent)",
       }}
     >
-      <Icon name="warning" size={13} className="mt-px shrink-0 text-warning" />
+      <TriangleAlert size={13} className="mt-px shrink-0 text-warning" />
       <div className="flex-1">
         <p className="text-[12px] font-semibold text-foreground">Can't reach the provider</p>
         <p className="mt-0.5 text-[11.5px] leading-[1.4] text-muted-foreground">

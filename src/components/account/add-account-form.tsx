@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { DRButton } from "@/components/dr/button"
 import { DRInput } from "@/components/dr/input"
-import { Icon } from "@/components/dr/icon"
+import { ExternalLink } from "lucide-react"
 import { ProviderChip } from "@/components/dr/provider-chip"
 import { cn } from "@/lib/utils"
 import {
@@ -290,7 +290,7 @@ export function AddAccountForm({
                 onClick={openTokenUrl}
               >
                 {link.label}
-                <Icon name="external" size={11} />
+                <ExternalLink size={11} />
               </a>
               {link.hint ? (
                 <>

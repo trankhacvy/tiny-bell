@@ -1,3 +1,4 @@
+import { RefreshCw, Settings } from "lucide-react"
 import { windowApi } from "@/lib/deployments"
 import { IconButton } from "./icon-button"
 import type { Deployment } from "@/lib/deployments"
@@ -59,13 +60,13 @@ export function PopoverHeader({ deployments, onRefresh }: PopoverHeaderProps) {
       </div>
       <span className="flex-1" />
       <IconButton
-        name="refresh"
+        icon={RefreshCw}
         size={13}
         tooltip="Refresh (⌘R)"
         onClick={onRefresh}
       />
       <IconButton
-        name="gear"
+        icon={Settings}
         size={13}
         tooltip="Settings"
         onClick={() => void windowApi.openDesktop("settings")}

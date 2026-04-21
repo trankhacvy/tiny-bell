@@ -6,7 +6,7 @@ import {
   DRMenuSeparator,
   DRMenuLabel,
 } from "@/components/dr/menu"
-import { Icon } from "@/components/dr/icon"
+import { Check, ChevronDown, Plus } from "lucide-react"
 import { ProviderMark } from "@/components/dr/provider-mark"
 import { ProjectFilter, type ProjectSelection } from "./project-filter"
 import { cn } from "@/lib/utils"
@@ -65,7 +65,7 @@ function AccountPicker({
           >
             {current ? current.display_name : "All accounts"}
           </span>
-          <Icon name="chevron-down" size={11} className="shrink-0 text-faint" />
+          <ChevronDown size={11} className="shrink-0 text-faint" />
         </button>
       }
     >
@@ -94,7 +94,7 @@ function AccountPicker({
           <span className="text-[12.5px] font-semibold text-foreground">All accounts</span>
           <span className="text-[11px] text-faint">{accounts.length} connected · all deploys</span>
         </span>
-        {scope === "all" && <Icon name="check" size={13} className="shrink-0 text-foreground" />}
+        {scope === "all" && <Check size={13} className="shrink-0 text-foreground" />}
       </DM.Item>
 
       <DRMenuSeparator />
@@ -130,7 +130,7 @@ function AccountPicker({
                     </span>
                   )}
                 </span>
-                {scope === acc.id && <Icon name="check" size={13} className="shrink-0 text-foreground" />}
+                {scope === acc.id && <Check size={13} className="shrink-0 text-foreground" />}
               </DM.Item>
             ))}
           </Fragment>
@@ -138,7 +138,7 @@ function AccountPicker({
       })}
 
       <DRMenuSeparator />
-      <DRMenuItem left={<Icon name="plus" size={12} />} onSelect={() => void windowApi.openDesktop("onboarding")}>
+      <DRMenuItem left={<Plus size={12} />} onSelect={() => void windowApi.openDesktop("onboarding")}>
         Add account…
       </DRMenuItem>
     </DRMenu>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { DropdownMenu as DM } from "radix-ui"
-import { Icon } from "@/components/dr/icon"
+import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Deployment, DeploymentState, Project } from "@/lib/deployments"
 
@@ -119,11 +119,7 @@ export function ProjectFilter({
               {count}
             </span>
           )}
-          <Icon
-            name="chevron-down"
-            size={10}
-            className="shrink-0 text-muted-foreground"
-          />
+          <ChevronDown size={10} className="shrink-0 text-muted-foreground" />
         </button>
       </DM.Trigger>
       <DM.Portal>

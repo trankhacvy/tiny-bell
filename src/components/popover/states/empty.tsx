@@ -1,4 +1,4 @@
-import { Icon } from "@/components/dr/icon"
+import { Dot } from "lucide-react"
 
 type Props = {
   /** Number of GitHub repos being monitored without any Actions history yet.
@@ -11,7 +11,7 @@ export function PopoverEmpty({ dormantGitHubRepos = 0 }: Props) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
       <div className="mb-[14px] flex size-[44px] items-center justify-center rounded-full border border-dashed border-border text-faint">
-        <Icon name="dot" size={14} />
+        <Dot size={14} />
       </div>
       <p className="mb-1 text-[13px] font-semibold text-foreground">
         {githubOnly ? "Watching, no runs yet." : "Suspiciously quiet."}

@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { DRBadge } from "@/components/dr/badge"
 import { DRButton } from "@/components/dr/button"
-import { Icon } from "@/components/dr/icon"
+import { ChevronDown, Plus, TriangleAlert } from "lucide-react"
 import { ProviderMark } from "@/components/dr/provider-mark"
 import { DRMenu, DRMenuItem, DRMenuSeparator } from "@/components/dr/menu"
 import { AddAccountDialog } from "@/components/account/add-account-dialog"
@@ -133,7 +133,7 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
         <DRButton
           variant="secondary"
           size="sm"
-          leading={<Icon name="plus" size={12} />}
+          leading={<Plus size={12} />}
           onClick={handleAddAccount}
         >
           Add account
@@ -177,7 +177,7 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
                     className="inline-flex size-7 items-center justify-center rounded-[5px] text-muted-foreground outline-none hover:bg-hover hover:text-foreground"
                     aria-label={`Actions for ${acc.display_name}`}
                   >
-                    <Icon name="chevron-down" size={12} />
+                    <ChevronDown size={12} />
                   </button>
                 }
               >
@@ -313,7 +313,7 @@ function ReauthBanner({
         className="inline-flex size-5 shrink-0 items-center justify-center rounded-full"
         style={{ background: "var(--amber)" }}
       >
-        <Icon name="warning" size={12} className="text-white" />
+        <TriangleAlert size={12} className="text-white" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-[12.5px] font-medium text-foreground">
