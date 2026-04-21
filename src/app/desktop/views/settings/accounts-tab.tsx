@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 
 import { DRBadge } from "@/components/dr/badge"
@@ -40,6 +40,8 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
   const [repoSelectorAccountId, setRepoSelectorAccountId] = useState<
     string | null
   >(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
 
   useEffect(() => {
@@ -61,9 +63,27 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
     await onAccountsChange()
   }
 
-  async function handleRename(id: string, current: string) {
-    const next = window.prompt("Rename account", current)?.trim()
-    if (!next || next === current) return
+  function startRename(id: string, current: string) {
+    setRenamingId(id)
+    setRenameValue(current)
+  }
+
+  function cancelRename() {
+    setRenamingId(null)
+    setRenameValue("")
+  }
+
+  async function commitRename() {
+    if (!renamingId) return
+    const next = renameValue.trim()
+    const current =
+      accounts.find((a) => a.id === renamingId)?.display_name ?? ""
+    if (!next || next === current) {
+      cancelRename()
+      return
+    }
+    const id = renamingId
+    cancelRename()
     await accountsApi.rename(id, next)
     await onAccountsChange()
   }
@@ -161,9 +181,18 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
                 <ProviderMark platform={acc.platform} size={14} />
               </span>
               <div className="min-w-0">
-                <span className="block truncate text-[12.5px] font-semibold text-foreground">
-                  {acc.display_name}
-                </span>
+                {renamingId === acc.id ? (
+                  <RenameInput
+                    value={renameValue}
+                    onChange={setRenameValue}
+                    onCommit={() => void commitRename()}
+                    onCancel={cancelRename}
+                  />
+                ) : (
+                  <span className="block truncate text-[12.5px] font-semibold text-foreground">
+                    {acc.display_name}
+                  </span>
+                )}
                 <span className="block text-[11.5px] text-faint">
                   {PLATFORM_LABEL[acc.platform]}
                 </span>
@@ -187,7 +216,7 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
                   </DRMenuItem>
                 ) : null}
                 <DRMenuItem
-                  onSelect={() => void handleRename(acc.id, acc.display_name)}
+                  onSelect={() => startRename(acc.id, acc.display_name)}
                 >
                   Rename…
                 </DRMenuItem>
@@ -268,6 +297,46 @@ export function SettingsAccounts({ accounts, onAccountsChange }: Props) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+type RenameInputProps = {
+  value: string
+  onChange: (next: string) => void
+  onCommit: () => void
+  onCancel: () => void
+}
+
+function RenameInput({ value, onChange, onCommit, onCancel }: RenameInputProps) {
+  const ref = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [])
+
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      onCommit()
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      onCancel()
+    }
+  }
+
+  return (
+    <input
+      ref={ref}
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={handleKeyDown}
+      onBlur={onCommit}
+      className="block w-full rounded-[4px] border border-border bg-surface-2 px-1.5 py-0.5 text-[12.5px] font-semibold text-foreground outline-none focus:border-foreground"
+    />
   )
 }
 
