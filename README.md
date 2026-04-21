@@ -1,8 +1,30 @@
-# Tiny Bell
+<p align="center">
+  <img src="./public/app-icon.png" alt="Tiny Bell" width="128" height="128" />
+</p>
 
-> _Tune in to your deploys._
+<h1 align="center">Tiny Bell</h1>
+
+<p align="center"><em>Tune in to your deploys.</em></p>
 
 A quiet menubar app that monitors real-time build & deployment status for **Vercel**, **Railway**, and **GitHub Actions**. Built with Tauri v2 + React 19 + TypeScript.
+
+## Screenshots
+
+<p align="center">
+  <img src="./screenshots/deployments.png" alt="Deployment feed" width="380" />
+</p>
+
+<p align="center">
+  <img src="./screenshots/accounts.png" alt="Connected accounts" width="520" />
+  <br />
+  <em>Settings → Accounts</em>
+</p>
+
+<p align="center">
+  <img src="./screenshots/add-account.png" alt="Add account dialog" width="520" />
+  <br />
+  <em>Connect via OAuth or paste-token</em>
+</p>
 
 ## Status
 
