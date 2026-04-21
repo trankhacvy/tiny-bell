@@ -94,6 +94,8 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(external_navigation_plugin())
         .invoke_handler(tauri::generate_handler![
             account_cmds::start_oauth,
@@ -128,7 +130,9 @@ pub fn run() {
             prefs_cmds::get_prefs,
             prefs_cmds::set_pref,
             prefs_cmds::set_window_theme,
+            #[cfg(debug_assertions)]
             notification_cmds::test_notification,
+            #[cfg(debug_assertions)]
             notification_cmds::open_notification_settings,
         ])
         .setup(|app| {

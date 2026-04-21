@@ -82,7 +82,7 @@ export function SettingsGeneral() {
       <p className="text-[11px] font-semibold uppercase tracking-[0.5px] text-faint">
         Notifications
       </p>
-      <NotificationPermissionCard />
+      {import.meta.env.DEV ? <NotificationPermissionCard /> : null}
       <SettingsCard>
         <SettingsRow
           title="Notify on failed deploy"
